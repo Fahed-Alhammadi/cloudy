@@ -1,0 +1,50 @@
+# FileCloud — server deployment from the published image (no source code needed).
+# Put this file and your .env in one folder, then:
+#   docker compose up -d                          # start
+#   docker compose --profile autoupdate up -d     # start + automatic updates
+# Without compose:  docker run -d --name filecloud --env-file .env -p 8080:8080 \
+#   -v filecloud-data:/data -v filecloud-db:/var/lib/filecloud/db ghcr.io/fahed-alhammadi/filecloud:latest
+name: filecloud
+
+services:
+  filecloud:
+    image: ghcr.io/fahed-alhammadi/filecloud:latest
+    container_name: filecloud
+    restart: unless-stopped
+    env_file: .env              # every setting comes from .env
+    ports:
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
+    volumes:
+      # User files — the app-data volume, or a host folder such as your NFS mount.
+      - ${DATA_PATH:-app-data}:/data
+      # Database — keep on a local disk (not NFS).
+      - ${DB_PATH:-db-data}:/var/lib/filecloud/db
+
+  # Optional: every UPDATE_INTERVAL seconds, pull a newer image and restart FileCloud with it.
+  updater:
+    image: docker:27-cli
+    profiles: [autoupdate]
+    restart: unless-stopped
+    environment:
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-21600}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/project:ro
+      # Only if the image is private: reuse the host's `docker login ghcr.io` credentials.
+      # - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          echo "[updater] $$(date -u +%FT%TZ) checking for a newer image"
+          if docker compose --project-directory /project pull --quiet filecloud; then
+            docker compose --project-directory /project up -d --no-deps filecloud
+            docker image prune -f >/dev/null 2>&1
+          fi
+          sleep "$$UPDATE_INTERVAL"
+        done
+
+volumes:
+  app-data:
+  db-data:

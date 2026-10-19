@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, copyFile } from 'node:fs/promises';
+import { mkdir, rename, rm, copyFile, writeFile as fsWriteFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Transform } from 'node:stream';
@@ -41,8 +41,22 @@ export const blobPath = (blob: string) => path.join(config.dataDir, 'blobs', blo
 export const tmpPath = (name: string) => path.join(config.dataDir, 'tmp', name);
 export const uploadPath = (id: string) => path.join(config.dataDir, 'uploads', id);
 
+/** Creates the storage layout and fails early, with a useful message, if DATA_DIR is not writable. */
 export async function ensureDirs(): Promise<void> {
-  for (const d of ['blobs', 'tmp', 'uploads']) await mkdir(path.join(config.dataDir, d), { recursive: true });
+  const probe = path.join(config.dataDir, 'tmp', `.write-test-${process.pid}`);
+  try {
+    for (const d of ['blobs', 'tmp', 'uploads']) await mkdir(path.join(config.dataDir, d), { recursive: true });
+    await fsWriteFile(probe, 'ok');
+    await rm(probe, { force: true });
+  } catch (e: any) {
+    const uid = process.getuid?.() ?? '?';
+    const gid = process.getgid?.() ?? '?';
+    throw new Error(
+      `Storage at ${config.dataDir} is not writable by uid:gid ${uid}:${gid} (${e.code ?? e.message}). ` +
+      `Give DATA_PATH to that user (e.g. "chown -R ${uid}:${gid} <path>" or the NFS export's anonuid/anongid), ` +
+      `or set APP_USER in .env to the owner of the storage.`,
+    );
+  }
 }
 
 async function adoptBlob(file: string): Promise<string> {

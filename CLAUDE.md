@@ -2,11 +2,14 @@
 
 ## Overview
 Self-hosted cloud for files, sharing, calendars and contacts: Node.js/TypeScript server + plain-HTML5 web app +
-native Android app with over-the-air updates. Runs as a Docker Compose stack: app (Node 24, published on
-APP_PORT) → Postgres 17. TLS/reverse proxy is external.
+native Android app with over-the-air updates. Ships as ONE container (Node 24 server + embedded PostgreSQL 17,
+started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/reverse proxy is external.
 
 ## Structure
-- `docker-compose.yml`, `.env.example` — stack (`db`, `app`, optional `updater` under profile `autoupdate`); `.env` holds secrets (git-ignored).
+- `docker-compose.yml`, `.env.example` — service `filecloud` (`env_file: .env`, builds `app/`) + optional `updater` (profile `autoupdate`); `.env` is git-ignored.
+- `app/Dockerfile`, `app/docker/` — all-in-one image: `entrypoint.sh` (root → user setup, initdb, start postgres on the
+  `/run/filecloud` socket, then node as APP_USER; supervises both), `pg_hba.conf` (local trust only).
+- `deploy/docker-compose.yml` — standalone server deployment from `ghcr.io/fahed-alhammadi/filecloud:latest` (no build; inline updater loop). Keep in sync with the root compose.
 - `scripts/auto-update.sh` — loop run by the `updater` service: `compose pull app` + recreate when the image changed.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
 - `docs/ARCHITECTURE.md` — design notes. `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
@@ -46,6 +49,10 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - API errors: throw `HttpError(status, message)`; JSON API returns `{error}`. Mutating `/api` calls need header `X-FC-Request: 1`.
 - Access rules: read/edit on a node = owner or user/group share on it or an ancestor; changing/removing a node
   needs edit on its parent (`requireParentEdit`). Hidden nodes return 404, not 403.
+- Storage: `APP_USER` (entrypoint drops to it via su-exec), `DATA_PATH` → `/data` (may be NFS), `DB_PATH` → `/var/lib/filecloud/db`
+  (local disk). `ensureDirs()` probes writability and exits with a clear FATAL message. All of /data must be one filesystem.
+- PostgreSQL major is pinned in the image (`PG_MAJOR` in entrypoint); a mismatch with `DB_PATH/PG_VERSION` stops startup — plan
+  a dump/restore (or ship both versions + pg_upgrade) before bumping it.
 - `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`); keep it false when the port is exposed directly.
 - Android authenticates with `POST /api/auth/token` → bearer token (an app password); keep `data/Models.kt` in sync with the JSON API.
 - Releases: bump `app/package.json` version (server) and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts`;
@@ -56,6 +63,11 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-19: Single all-in-one container (server + embedded PostgreSQL 17 via tini/entrypoint); `DB_PASSWORD` removed,
+  `DB_PATH`/`DATABASE_URL` added, compose service renamed `filecloud` with `env_file: .env`. Existing volumes migrate as-is.
+- 2026-10-19: Added `deploy/docker-compose.yml` (image-only deployment); root compose now passes `UPDATE_REPO` to the app.
+- 2026-10-19: `.env` options `APP_USER` (run as uid:gid, default 1000:1000) and `DATA_PATH` (user-file storage, e.g. host NFS mount);
+  startup writability check.
 - 2026-10-19: CI fix — setup-android v3 failed installing legacy `tools`; now v4 with explicit SDK packages.
   All actions moved to Node 24 majors; runners pinned to ubuntu-24.04.
 - 2026-10-19: Renamed project to FileCloud (package `io.filecloud.app`, new signing key, DB `filecloud`); removed iOS app.

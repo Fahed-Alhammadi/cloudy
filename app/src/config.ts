@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 export const config = {
   port: Number(env.PORT ?? 8080),
   dataDir: env.DATA_DIR ?? '/data',
-  databaseUrl: env.DATABASE_URL ?? 'postgres://filecloud:filecloud@db:5432/filecloud',
+  databaseUrl: env.DATABASE_URL ?? 'postgres://filecloud@localhost/filecloud?host=/run/filecloud',
   adminUser: env.ADMIN_USER ?? 'admin',
   adminPassword: env.ADMIN_PASSWORD ?? '',
   trashDays: Number(env.TRASH_RETENTION_DAYS ?? 30),

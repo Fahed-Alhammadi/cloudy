@@ -1,7 +1,7 @@
 # FileCloud architecture
 
 FileCloud is a self-hosted cloud for files, sharing, calendars and contacts. It has three parts:
-- one Node.js service with a PostgreSQL database;
+- one container running the Node.js server and its own PostgreSQL database;
 - a browser app written in plain HTML5;
 - a native Android app.
 
@@ -23,6 +23,20 @@ WebDAV / CalDAV  │  /dav/*       WebDAV files, CalDAV calendars, CardDAV addre
                     calendars, contacts, releases)    uploads/ resumable uploads in progress
                                                       releases/ published APKs
 ```
+
+**Container layout.**
+- `tini` runs as process 1 and starts `filecloud-entrypoint`.
+- The entrypoint, still as root, does the setup:
+  - creates a named user for `APP_USER` (uid:gid);
+  - fixes ownership of the database folder;
+  - runs `initdb` the first time.
+- It then drops to `APP_USER` and starts PostgreSQL 17, which listens only on the Unix socket
+  `/run/filecloud`, with trust authentication and no TCP port.
+- Once the database answers, it starts the Node server.
+- If either process exits, the other is stopped and the container exits, so Docker's restart policy restarts
+  both together.
+- `docker stop` shuts both down cleanly.
+- Setting `DATABASE_URL` skips the embedded database entirely.
 
 TLS is provided by your own reverse proxy in front of the app port (see README). The server runs TypeScript
 directly through Node's type stripping, so there is no build step. The web app is plain ES modules served as

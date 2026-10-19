@@ -1,6 +1,7 @@
 # FileCloud
 
-Your own cloud for files, sharing, calendars and contacts. You run it yourself: one Docker Compose stack, a
+Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
+database inside), a
 browser app, and a native Android app that updates over the air.
 
 ## Features
@@ -26,9 +27,21 @@ browser app, and a native Android app that updates over the air.
 ## Quick start
 
 ```sh
-cp .env.example .env          # set DB_PASSWORD and ADMIN_PASSWORD
+cp .env.example .env          # set ADMIN_PASSWORD (everything else is optional)
 docker compose up -d --build
 ```
+
+Or run the published image without the source code. Use [`deploy/docker-compose.yml`](deploy/docker-compose.yml),
+or just:
+
+```sh
+docker run -d --name filecloud --restart unless-stopped --env-file .env -p 8080:8080 \
+  -v filecloud-data:/data -v filecloud-db:/var/lib/filecloud/db \
+  ghcr.io/fahed-alhammadi/filecloud:latest
+```
+
+The image contains FileCloud and its own PostgreSQL 17. The database is reachable only inside the container
+(no network port, no password to manage). Point `DATABASE_URL` at an external PostgreSQL if you prefer.
 
 Open http://localhost:8080 and sign in as `ADMIN_USER` / `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is empty, a
 random one is printed in `docker compose logs app`.
@@ -58,11 +71,38 @@ location / {
 }
 ```
 
-**Back up** the `db-data` and `app-data` volumes together.
+**Back up** the database (`DB_PATH`) and the user files (`DATA_PATH`) together. For a consistent database dump
+while FileCloud runs:
+
+```sh
+docker exec filecloud su-exec node pg_dump -h /run/filecloud -U filecloud filecloud > filecloud.sql
+```
+
+(Use your `APP_USER` uid instead of `node` if you changed it.)
+
+### Storing files on NFS or another disk
+
+User files live wherever `DATA_PATH` points. That folder holds uploads in progress, versions and trash
+too, so everything moves together. To use an NFS share:
+
+1. Mount the share on the host, e.g. `/mnt/filecloud` (add it to `/etc/fstab` so it mounts before Docker
+   starts).
+2. Make it writable by the user FileCloud runs as: `sudo chown 1000:1000 /mnt/filecloud`, or match the NFS
+   export's owner with `APP_USER`.
+3. In `.env`, set `DATA_PATH=/mnt/filecloud`, and `APP_USER=1000:1000` if it differs. Keep `DB_PATH` (the
+   database) on a local disk; databases on NFS risk corruption.
+4. Run `docker compose up -d`.
+
+If the folder isn't writable, the app refuses to start and logs exactly which uid:gid needs access.
+Moving an existing install: stop the stack, copy the contents of the old storage (for the default volume:
+`docker run --rm -v filecloud_app-data:/from -v /mnt/filecloud:/to alpine cp -a /from/. /to/`), set
+`DATA_PATH`, and start again.
 
 ## Updates
 
-**Server.**
+**Server.** To deploy on a server without the source code, copy [`deploy/docker-compose.yml`](deploy/docker-compose.yml)
+and your `.env` into one folder and run `docker compose up -d`. It uses `ghcr.io/fahed-alhammadi/filecloud:latest`.
+From a full checkout instead:
 1. Run a published image: set `FILECLOUD_IMAGE=ghcr.io/fahed-alhammadi/filecloud:latest` in `.env`, then run
    `docker compose pull && docker compose up -d`.
 2. Optional, see new versions in the admin page: set `UPDATE_REPO=Fahed-Alhammadi/filecloud`.
@@ -100,9 +140,12 @@ Create an app password under *Settings → Connect apps and devices*, then use:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `DB_PASSWORD` | — (required) | PostgreSQL password |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | `admin` / random | First administrator (created on first start) |
 | `APP_PORT` / `APP_BIND` | `8080` / `0.0.0.0` | Published port and interface |
+| `APP_USER` | `1000:1000` | uid:gid the server runs as |
+| `DATA_PATH` | `app-data` (volume) | Where user files are stored: a volume name or a host folder |
+| `DB_PATH` | `db-data` (volume) | Where the built-in database is stored (local disk) |
+| `DATABASE_URL` | built-in | External PostgreSQL instead of the built-in one |
 | `TRUST_PROXY` | `false` | Honor `X-Forwarded-*` headers (only behind a proxy) |
 | `TRASH_RETENTION_DAYS` | `30` | Days before trashed items are deleted |
 | `MAX_VERSIONS` | `20` | Versions kept per file |

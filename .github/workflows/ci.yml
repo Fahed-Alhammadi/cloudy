@@ -20,13 +20,13 @@ jobs:
         run: npm ci && npm run typecheck
       - name: Start stack
         run: |
-          printf 'DB_PASSWORD=ci-db-password\nADMIN_USER=admin\nADMIN_PASSWORD=ci-admin-password\n' > .env
+          printf 'ADMIN_USER=admin\nADMIN_PASSWORD=ci-admin-password\n' > .env
           docker compose up -d --build --wait
       - name: End-to-end tests
         run: python3 tests/e2e.py http://localhost:8080 admin ci-admin-password
       - name: Logs on failure
         if: failure()
-        run: docker compose logs app
+        run: docker compose logs filecloud
 
   android:
     runs-on: ubuntu-24.04

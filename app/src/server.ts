@@ -126,7 +126,12 @@ async function jobs(): Promise<void> {
   }
 }
 
-await ensureDirs();
+try {
+  await ensureDirs();
+} catch (e: any) {
+  console.error(`FATAL: ${e.message}`);
+  process.exit(1);
+}
 await migrate();
 await ensureAdmin();
 const server = createServer((req, res) => void handle(req, res));

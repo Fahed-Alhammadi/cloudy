@@ -6,8 +6,8 @@ compose() { docker compose --project-directory /project "$@"; }
 
 while true; do
   echo "[updater] $(date -u +%FT%TZ) checking for a newer image"
-  if compose pull --quiet app; then
-    compose up -d --no-deps --no-build app
+  if compose pull --quiet filecloud; then
+    compose up -d --no-deps --no-build filecloud
     docker image prune -f >/dev/null 2>&1
   else
     echo "[updater] pull failed — is FILECLOUD_IMAGE set to a registry image?"
