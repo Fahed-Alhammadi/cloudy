@@ -1,4 +1,4 @@
-// Thin fetch wrapper for the FileCloud JSON API.
+// Thin fetch wrapper for the Cloudy JSON API.
 
 export class ApiError extends Error {
   constructor(status, message, body) {
@@ -9,7 +9,7 @@ export class ApiError extends Error {
 }
 
 export async function api(method, path, body) {
-  const headers = { 'X-FC-Request': '1' };
+  const headers = { 'X-Cloudy-Request': '1' };
   let payload;
   if (body instanceof Blob || typeof body === 'string') {
     payload = body;
@@ -23,7 +23,7 @@ export async function api(method, path, body) {
   const data = res.status === 204 ? null : isJson ? await res.json() : await res.text();
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith('/api/public') && path !== '/api/login') {
-      window.dispatchEvent(new CustomEvent('fc:unauthorized'));
+      window.dispatchEvent(new CustomEvent('cloudy:unauthorized'));
     }
     throw new ApiError(res.status, (data && data.error) || res.statusText, data);
   }
@@ -41,7 +41,7 @@ export function xhrPut(url, blob, headers, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
-    xhr.setRequestHeader('X-FC-Request', '1');
+    xhr.setRequestHeader('X-Cloudy-Request', '1');
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     for (const [k, v] of Object.entries(headers || {})) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => onProgress && onProgress(e.loaded);

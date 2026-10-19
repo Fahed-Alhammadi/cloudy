@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="FileCloud logo" width="128" height="128">
+  <img src="docs/logo.svg" alt="Cloudy logo" width="128" height="128">
 </p>
 
-<h1 align="center">FileCloud</h1>
+<h1 align="center">Cloudy</h1>
 
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
 database inside), a browser app, and a native Android app that updates over the air.
@@ -23,44 +23,55 @@ database inside), a browser app, and a native Android app that updates over the 
   - back up photos automatically;
   - calendar and contacts;
   - **over-the-air updates** delivered by your own server.
-- **Administration:** users, groups, quotas, app passwords, and publishing Android releases.
+- **Security:** two-factor authentication (authenticator-app codes + recovery codes) for every user, app
+  passwords per device, brute-force protection.
+- **Administration:** users, groups, quotas, app passwords, 2FA reset, and publishing Android releases.
 
-## Quick start
+## Install
 
-Try it with one command. No account, token or configuration needed:
-
-```sh
-docker run -d --name filecloud -p 8080:8080 \
-  -v filecloud-data:/data -v filecloud-db:/var/lib/filecloud/db \
-  ghcr.io/fahed-alhammadi/filecloud:latest
-docker logs filecloud | grep "admin password"     # the generated password for user "admin"
-```
-
-Then open http://localhost:8080.
-
-For a permanent install, use Docker Compose. Put two files in one folder on your server:
-[`docker-compose.yml`](docker-compose.yml) and your `.env` (the `.env` is optional; without it, defaults apply).
+You need Docker with the Compose plugin. Three steps:
 
 ```sh
-cp .env.example .env          # set ADMIN_PASSWORD (everything else is optional)
-docker compose up -d          # pulls ghcr.io/fahed-alhammadi/filecloud:latest
+# 1. Get the compose file
+mkdir cloudy && cd cloudy
+curl -fsSLO https://raw.githubusercontent.com/Fahed-Alhammadi/cloudy/main/docker-compose.yml
+
+# 2. Set the admin password (and anything else you want to change)
+nano docker-compose.yml        # ADMIN_PASSWORD: ${ADMIN_PASSWORD:-your-password-here}
+
+# 3. Start
+docker compose up -d
 ```
 
-Or without compose:
+Open http://localhost:8080 (or `http://<server-ip>:8080`) and sign in as `admin` with your password.
+
+Every setting is in `docker-compose.yml` with its default, written as `${NAME:-default}`. To change one, edit
+the part after `:-`. For example, to store files on your NFS mount and use port 9000:
+
+```yaml
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-9000}:8080"
+      - ${DATA_PATH:-/mnt/cloudy}:/data
+```
+
+If you'd rather not touch the compose file, put the same names in a `.env` file next to it (see
+[`.env.example`](.env.example)). Values in `.env` override the defaults in the file.
+
+If you leave `ADMIN_PASSWORD` empty, a random password is generated on first start. Read it with
+`docker logs cloudy | grep "admin password"`.
+
+**Just trying it out?** One command, no files needed:
 
 ```sh
-docker run -d --name filecloud --restart unless-stopped --env-file .env -p 8080:8080 \
-  -v filecloud-data:/data -v filecloud-db:/var/lib/filecloud/db \
-  ghcr.io/fahed-alhammadi/filecloud:latest
+docker run -d --name cloudy -p 8080:8080 \
+  -v cloudy-data:/data -v cloudy-db:/var/lib/cloudy/db \
+  ghcr.io/fahed-alhammadi/cloudy:latest
+docker logs cloudy | grep "admin password"
 ```
 
-The image contains FileCloud and its own PostgreSQL 17. The database is reachable only inside the container
-(no network port, no password to manage). Point `DATABASE_URL` at an external PostgreSQL if you prefer.
+The image contains Cloudy and its own PostgreSQL 17. The database is reachable only inside the container
+(no network port, no password to manage). Set `DATABASE_URL` to use an external PostgreSQL instead.
 
-Open http://localhost:8080 and sign in as `ADMIN_USER` / `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is empty, a
-random one is printed in `docker compose logs filecloud`.
-
-**Build from source instead** (development or your own changes), from the repository root:
+**Build from source instead** (development or your own changes), from a clone of this repository:
 
 ```sh
 docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
@@ -70,13 +81,13 @@ Both compose files use the same project name and volumes, so switching between t
 
 ## Production
 
-FileCloud serves plain HTTP on `APP_PORT` (default 8080). Put it behind your reverse proxy for TLS, and set
-`TRUST_PROXY=true` in `.env`. The proxy must:
+Cloudy serves plain HTTP on `APP_PORT` (default 8080). Put it behind your reverse proxy for TLS, and set
+`TRUST_PROXY` to `true`. The proxy must:
 - forward `Host`, `X-Forwarded-For` and `X-Forwarded-Proto`;
 - allow unlimited request bodies and long timeouts (uploads arrive in 8 MB chunks; downloads stream);
 - pass all HTTP methods through (WebDAV uses PROPFIND, MKCOL, MOVE, COPY, LOCK, REPORT…).
 
-Set `APP_BIND=127.0.0.1` if the proxy runs on the same host.
+Set `APP_BIND` to `127.0.0.1` if the proxy runs on the same host.
 
 Example nginx location:
 
@@ -94,10 +105,10 @@ location / {
 ```
 
 **Back up** the database (`DB_PATH`) and the user files (`DATA_PATH`) together. For a consistent database dump
-while FileCloud runs:
+while Cloudy runs:
 
 ```sh
-docker exec filecloud su-exec node pg_dump -h /run/filecloud -U filecloud filecloud > filecloud.sql
+docker exec cloudy su-exec node pg_dump -h /run/cloudy -U cloudy cloudy > cloudy.sql
 ```
 
 (Use your `APP_USER` uid instead of `node` if you changed it.)
@@ -107,23 +118,23 @@ docker exec filecloud su-exec node pg_dump -h /run/filecloud -U filecloud filecl
 User files live wherever `DATA_PATH` points. That folder holds uploads in progress, versions and trash
 too, so everything moves together. To use an NFS share:
 
-1. Mount the share on the host, e.g. `/mnt/filecloud` (add it to `/etc/fstab` so it mounts before Docker
+1. Mount the share on the host, e.g. `/mnt/cloudy` (add it to `/etc/fstab` so it mounts before Docker
    starts).
-2. Make it writable by the user FileCloud runs as: `sudo chown 1000:1000 /mnt/filecloud`, or match the NFS
+2. Make it writable by the user Cloudy runs as: `sudo chown 1000:1000 /mnt/cloudy`, or match the NFS
    export's owner with `APP_USER`.
-3. In `.env`, set `DATA_PATH=/mnt/filecloud`, and `APP_USER=1000:1000` if it differs. Keep `DB_PATH` (the
-   database) on a local disk; databases on NFS risk corruption.
+3. Set `DATA_PATH` to `/mnt/cloudy` (and `APP_USER` if the owner isn't 1000:1000), in `docker-compose.yml`
+   or `.env`. Keep `DB_PATH` (the database) on a local disk; databases on NFS risk corruption.
 4. Run `docker compose up -d`.
 
 If the folder isn't writable, the app refuses to start and logs exactly which uid:gid needs access.
 Moving an existing install: stop the stack, copy the contents of the old storage (for the default volume:
-`docker run --rm -v filecloud_app-data:/from -v /mnt/filecloud:/to alpine cp -a /from/. /to/`), set
+`docker run --rm -v cloudy_app-data:/from -v /mnt/cloudy:/to alpine cp -a /from/. /to/`), set
 `DATA_PATH`, and start again.
 
 ## Updates
 
-**Server.** The root `docker-compose.yml` runs `ghcr.io/fahed-alhammadi/filecloud:latest`. To update to the
-newest release:
+**Server.** `docker-compose.yml` runs `ghcr.io/fahed-alhammadi/cloudy:latest`. To update to the newest
+release, run this in the folder with your `docker-compose.yml`:
 
 ```sh
 docker compose pull && docker compose up -d
@@ -136,13 +147,26 @@ The database schema migrates itself at startup. Your data stays in the volumes. 
 
 ```sh
 mobile/android/build-apk.sh              # bump versionCode/versionName in app/build.gradle.kts first
-FILECLOUD_URL=https://cloud.example.com FILECLOUD_TOKEN=<admin app password> \
+CLOUDY_URL=https://cloud.example.com CLOUDY_TOKEN=<admin app password> \
   mobile/android/publish-apk.sh "What's new"
 ```
 
 You can also upload it in *Administration → Android app*. Users download the first install from
 `https://<your-server>/download/android`, which is also linked on the login page. See
 [mobile/README.md](mobile/README.md) for details.
+
+## Two-factor authentication
+
+Each user can turn it on under *Settings → Two-factor authentication*:
+1. Scan the QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password…).
+2. Confirm with a code.
+3. Save the 10 recovery codes shown.
+
+From then on, the web app and the Android app ask for a code after the password. A recovery code can be used
+once instead, if the phone is lost.
+
+With 2FA on, WebDAV, CalDAV and CardDAV apps must sign in with an **app password**, because those protocols
+can't ask for a code. An administrator can reset 2FA for a user under *Administration → Edit user*.
 
 ## Connecting other apps
 
@@ -153,7 +177,9 @@ Create an app password under *Settings → Connect apps and devices*, then use:
 | WebDAV (Finder, Explorer, rclone, Cyberduck) | `https://<host>/dav/files/<username>/` |
 | CalDAV / CardDAV (Thunderbird, DAVx⁵, Apple) | `https://<host>/dav/` (auto-discovered via `/.well-known/caldav` and `/.well-known/carddav`) |
 
-## Configuration (`.env`)
+## Configuration
+
+Set these in `docker-compose.yml` (the value after `:-`) or in a `.env` file next to it.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -166,6 +192,7 @@ Create an app password under *Settings → Connect apps and devices*, then use:
 | `TRUST_PROXY` | `false` | Honor `X-Forwarded-*` headers (only behind a proxy) |
 | `TRASH_RETENTION_DAYS` | `30` | Days before trashed items are deleted |
 | `MAX_VERSIONS` | `20` | Versions kept per file |
+| `SESSION_DAYS` | `14` | How long a browser login lasts |
 
 ## Development
 
@@ -175,7 +202,7 @@ Create an app password under *Settings → Connect apps and devices*, then use:
 | End-to-end tests (stack running) | `python3 tests/e2e.py http://localhost:8080 admin '<admin password>'` |
 | Android debug build | `cd mobile/android && ./gradlew assembleDebug` (JDK 17+, Android SDK 35) |
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how FileCloud works inside.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how Cloudy works inside.
 
 ## Project layout
 

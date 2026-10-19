@@ -1,12 +1,12 @@
-package io.filecloud.app
+package io.cloudy.app
 
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import io.filecloud.app.data.Api
-import io.filecloud.app.data.Offline
-import io.filecloud.app.data.Session
-import io.filecloud.app.work.Jobs
+import io.cloudy.app.data.Api
+import io.cloudy.app.data.Offline
+import io.cloudy.app.data.Session
+import io.cloudy.app.work.Jobs
 
 /** Process-wide singletons. */
 object Services {
@@ -15,7 +15,7 @@ object Services {
     lateinit var offline: Offline
 }
 
-class FileCloudApp : Application(), ImageLoaderFactory {
+class CloudyApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         Services.session = Session(this)

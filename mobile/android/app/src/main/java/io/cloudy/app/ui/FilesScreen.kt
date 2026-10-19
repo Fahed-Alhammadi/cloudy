@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -83,10 +83,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import io.filecloud.app.Services
-import io.filecloud.app.data.ApiException
-import io.filecloud.app.data.FileNode
-import io.filecloud.app.data.NodeListing
+import io.cloudy.app.Services
+import io.cloudy.app.data.ApiException
+import io.cloudy.app.data.FileNode
+import io.cloudy.app.data.NodeListing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File

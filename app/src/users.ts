@@ -63,6 +63,7 @@ export async function userJson(u: User) {
     displayName: u.display_name,
     email: u.email,
     isAdmin: u.is_admin,
+    twoFactor: !!u.totp_enabled,
     disabled: u.disabled,
     quotaBytes: u.quota_bytes,
     used: await usage(u.id),

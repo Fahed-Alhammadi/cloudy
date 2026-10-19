@@ -42,12 +42,14 @@ export async function renderSettings(main, ctx) {
       h('label', { class: 'field' }, h('span', {}, 'New password (8+ characters)'), pw1),
       h('div', { class: 'wide row end' }, h('button', { class: 'btn primary', type: 'submit' }, 'Change password'))),
 
+    twoFactorCard(me, rerender),
+
     h('div', { class: 'card' }, h('h2', {}, 'Connect apps and devices'),
       h('p', {}, 'Use these addresses in a WebDAV client (Finder, Windows Explorer, rclone, Cyberduck) or a calendar/contacts app (Thunderbird, DAVx⁵, Apple Calendar/Contacts). Sign in with your username and an app password.'),
       urlRow('Files (WebDAV)', `${davBase}/files/${encodeURIComponent(me.id)}/`),
       urlRow('Calendars & contacts', `${davBase}/`),
       urlRow('Username', me.id),
-      h('p', {}, icon('download'), ' ', h('a', { href: '/download/android' }, 'Download the FileCloud Android app'), h('span', { class: 'muted' }, ' (when your administrator has published it)')),
+      h('p', {}, icon('download'), ' ', h('a', { href: '/download/android' }, 'Download the Cloudy Android app'), h('span', { class: 'muted' }, ' (when your administrator has published it)')),
       h('h3', {}, 'App passwords'),
       appPasswords.length ? h('ul', { class: 'plain-list' }, appPasswords.map((p) => h('li', {}, icon('key'),
         h('span', { class: 'grow' }, p.name, h('small', { class: 'muted' }, ` · created ${fullDate(p.createdAt)}${p.lastUsedAt ? ` · last used ${fullDate(p.lastUsedAt)}` : ''}`)),
@@ -68,6 +70,76 @@ export async function renderSettings(main, ctx) {
   ));
 }
 
+// ---------------------------------------------------------------- two-factor authentication
+
+function recoveryCodesBody(codes) {
+  const text = codes.join('\n');
+  return h('div', {},
+    h('p', {}, 'Save these recovery codes somewhere safe. Each one signs you in once if you lose your phone. They will not be shown again.'),
+    h('pre', { class: 'recovery-codes' }, text),
+    h('div', { class: 'row' },
+      h('button', { type: 'button', class: 'btn', onclick: () => copyText(text) }, icon('copy'), 'Copy'),
+      h('a', { class: 'btn', href: URL.createObjectURL(new Blob([`Cloudy recovery codes\n\n${text}\n`], { type: 'text/plain' })), download: 'cloudy-recovery-codes.txt' }, icon('download'), 'Download')));
+}
+
+function twoFactorCard(me, rerender) {
+  const enable = async () => {
+    let setup;
+    try { setup = await post('/api/me/2fa/setup'); } catch (e) { return showError(e); }
+    const code = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', required: true, placeholder: '123 456', 'aria-label': 'Code from the app' });
+    let codes = null;
+    await modal({
+      title: 'Turn on two-factor authentication',
+      body: h('div', { class: 'twofa-setup' },
+        h('p', {}, '1. Scan this QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password…).'),
+        h('img', { class: 'qr', alt: 'QR code for your authenticator app', src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(setup.qrSvg) }),
+        h('p', { class: 'muted small' }, "Can't scan? Enter this key manually: ", h('code', { class: 'secret' }, setup.secret.replace(/(.{4})/g, '$1 ').trim())),
+        h('label', { class: 'field' }, h('span', {}, '2. Enter the 6-digit code the app shows'), code)),
+      buttons: [{ label: 'Cancel', value: null }, { label: 'Turn on', value: 'ok', primary: true }],
+      onSubmit: async () => {
+        try {
+          codes = (await post('/api/me/2fa/enable', { code: code.value })).recoveryCodes;
+          return true;
+        } catch (e) { showError(e); code.select(); return false; }
+      },
+    });
+    if (codes) {
+      await modal({ title: 'Two-factor authentication is on', body: recoveryCodesBody(codes), buttons: [{ label: "I've saved them", value: 'ok', primary: true }] });
+      rerender();
+    }
+  };
+
+  const withPassword = async (title, okLabel, danger, path) => {
+    const pw = h('input', { type: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
+    let result = null;
+    await modal({
+      title, body: h('label', { class: 'field' }, h('span', {}, 'Confirm with your password'), pw),
+      buttons: [{ label: 'Cancel', value: null }, { label: okLabel, value: 'ok', primary: true, danger }],
+      onSubmit: async () => {
+        try { result = (await post(path, { password: pw.value })) ?? {}; return true; } catch (e) { showError(e); return false; }
+      },
+    });
+    return result;
+  };
+
+  return h('div', { class: 'card' }, h('h2', {}, 'Two-factor authentication'),
+    me.twoFactor
+      ? h('div', {},
+          h('p', {}, h('span', { class: 'pill' }, 'on'), ' Signing in requires a code from your authenticator app. Apps that use WebDAV, CalDAV or CardDAV must use an app password.'),
+          h('div', { class: 'row' },
+            h('button', { class: 'btn', onclick: async () => {
+              const r = await withPassword('New recovery codes', 'Create new codes', false, '/api/me/2fa/recovery-codes');
+              if (r?.recoveryCodes) await modal({ title: 'New recovery codes', body: recoveryCodesBody(r.recoveryCodes), buttons: [{ label: 'Done', value: 'ok', primary: true }] });
+            } }, icon('key'), 'New recovery codes'),
+            h('button', { class: 'btn danger', onclick: async () => {
+              if (await withPassword('Turn off two-factor authentication', 'Turn off', true, '/api/me/2fa/disable')) { toast('Two-factor authentication is off'); rerender(); }
+            } }, 'Turn off')))
+      : h('div', {},
+          h('p', {}, 'Protect your account with a code from your phone in addition to your password.'),
+          h('button', { class: 'btn primary', onclick: enable }, icon('lock'), 'Turn on two-factor authentication')),
+  );
+}
+
 // ---------------------------------------------------------------- admin
 
 const GB = 1024 ** 3;
@@ -82,6 +154,7 @@ async function userDialog(user, groups, rerender) {
     quota: h('input', { type: 'number', min: 0, step: 0.5, value: user?.quotaBytes ? +(user.quotaBytes / GB).toFixed(2) : '', placeholder: 'Unlimited' }),
     isAdmin: h('input', { type: 'checkbox', checked: !!user?.isAdmin }),
     disabled: h('input', { type: 'checkbox', checked: !!user?.disabled }),
+    resetTwoFactor: h('input', { type: 'checkbox' }),
     groups: h('select', { multiple: true, size: Math.min(6, Math.max(2, groups.length)) }, groups.map((g) => h('option', { value: g.id, selected: user?.groups.includes(g.id) }, g.id))),
   };
   await modal({
@@ -94,6 +167,7 @@ async function userDialog(user, groups, rerender) {
       h('label', { class: 'field' }, h('span', {}, 'Quota (GB)'), f.quota),
       h('label', { class: 'field' }, h('span', {}, 'Groups'), groups.length ? f.groups : h('span', { class: 'muted' }, 'No groups yet')),
       h('label', { class: 'check' }, f.isAdmin, 'Administrator'),
+      user?.twoFactor && h('label', { class: 'check' }, f.resetTwoFactor, 'Reset two-factor authentication (lost phone)'),
       !isNew && h('label', { class: 'check' }, f.disabled, 'Disabled'),
     ),
     buttons: [{ label: 'Cancel', value: null }, { label: isNew ? 'Create' : 'Save', value: 'save', primary: true }],
@@ -105,7 +179,7 @@ async function userDialog(user, groups, rerender) {
       };
       try {
         if (isNew) await post('/api/admin/users', { ...data, id: f.id.value.trim(), password: f.password.value });
-        else await patch(`/api/admin/users/${encodeURIComponent(user.id)}`, { ...data, disabled: f.disabled.checked, password: f.password.value || undefined });
+        else await patch(`/api/admin/users/${encodeURIComponent(user.id)}`, { ...data, disabled: f.disabled.checked, password: f.password.value || undefined, resetTwoFactor: f.resetTwoFactor.checked || undefined });
         rerender();
         return true;
       } catch (e) {
@@ -130,7 +204,7 @@ export async function renderAdmin(main, ctx) {
           h('td', {}, u.email),
           h('td', {}, u.groups.join(', ')),
           h('td', { class: 'nowrap' }, `${formatSize(u.used)}${u.quotaBytes ? ` / ${formatSize(u.quotaBytes)}` : ''}`),
-          h('td', {}, u.isAdmin ? h('span', { class: 'pill' }, 'admin') : '', u.disabled ? h('span', { class: 'pill warn' }, 'disabled') : ''),
+          h('td', {}, u.isAdmin ? h('span', { class: 'pill' }, 'admin') : '', u.twoFactor ? h('span', { class: 'pill' }, '2FA') : '', u.disabled ? h('span', { class: 'pill warn' }, 'disabled') : ''),
           h('td', { class: 'nowrap' },
             h('button', { class: 'icon-btn', 'aria-label': `Edit ${u.id}`, onclick: () => userDialog(u, groups, rerender) }, icon('edit')),
             u.id !== ctx.me.id && h('button', { class: 'icon-btn', 'aria-label': `Delete ${u.id}`, onclick: async () => {
@@ -164,7 +238,7 @@ async function androidCard(rerender) {
   const status = h('span', { class: 'muted' });
   return h('div', { class: 'card' },
     h('h2', {}, 'Android app (over-the-air updates)'),
-    h('p', { class: 'muted' }, 'The newest APK published here is offered to every installed FileCloud Android app, and can be downloaded at ',
+    h('p', { class: 'muted' }, 'The newest APK published here is offered to every installed Cloudy Android app, and can be downloaded at ',
       h('a', { href: '/download/android' }, '/download/android'), '. It must be signed with the same key as the installed app and have a higher version code.'),
     releases.length ? h('ul', { class: 'plain-list' }, releases.map((r, i) => h('li', {}, icon('download'),
       h('span', { class: 'grow' }, h('strong', {}, `${r.versionName} (${r.versionCode})`), i === 0 ? h('span', { class: 'pill' }, 'latest') : null,

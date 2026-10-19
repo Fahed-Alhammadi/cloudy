@@ -11,7 +11,7 @@ const url = (node, inline) => `${base}/nodes/${node.id}/download${inline ? '?inl
 
 function frame(title, subtitle, ...content) {
   app.replaceChildren(
-    h('header', { class: 'topbar' }, h('span', { class: 'brand' }, icon('cloud'), 'FileCloud'),
+    h('header', { class: 'topbar' }, h('span', { class: 'brand' }, icon('cloud'), 'Cloudy'),
       h('div', { class: 'public-title' }, h('strong', {}, title), subtitle && h('small', { class: 'muted' }, subtitle))),
     h('main', { class: 'content public' }, ...content),
   );
@@ -99,7 +99,7 @@ async function start() {
   try {
     const info = await get(base);
     if (info.needsPassword) return passwordForm();
-    document.title = `${info.node.name} – FileCloud`;
+    document.title = `${info.node.name} – Cloudy`;
     await showNode(info, info.node.id);
   } catch (e) {
     frame('Link unavailable', null, h('div', { class: 'empty' }, icon('link'), h('p', {}, e.message)));

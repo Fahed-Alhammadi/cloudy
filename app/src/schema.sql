@@ -1,4 +1,4 @@
--- FileCloud schema. Applied idempotently at every start.
+-- Cloudy schema. Applied idempotently at every start.
 
 CREATE TABLE IF NOT EXISTS settings (
   key text PRIMARY KEY,
@@ -182,4 +182,16 @@ CREATE TABLE IF NOT EXISTS app_releases (
   file text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (platform, version_code)
+);
+
+-- Two-factor authentication (TOTP). totp_pending holds a secret during setup until confirmed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_pending text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_step bigint NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS recovery_codes (
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash text NOT NULL,
+  PRIMARY KEY (user_id, code_hash)
 );

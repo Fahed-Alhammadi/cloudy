@@ -1,27 +1,41 @@
-# FileCloud — one container (server + built-in PostgreSQL), run from the published image.
+# Cloudy — one container (server + built-in PostgreSQL), run from the published image.
 # Put this file and your .env in one folder, then:
 #   docker compose up -d                              # start
 #   docker compose pull && docker compose up -d       # update to the latest image
 # All settings live in .env (see .env.example). To build from source instead, see deploy/docker-compose.yml.
 # The app listens on APP_PORT (default 8080). In production put it behind your reverse proxy
 # (TLS termination) and set TRUST_PROXY=true.
-name: filecloud
+name: cloudy
 
 services:
-  filecloud:
-    image: ghcr.io/fahed-alhammadi/filecloud:latest
-    container_name: filecloud
+  cloudy:
+    image: ghcr.io/fahed-alhammadi/cloudy:latest
+    container_name: cloudy
     restart: unless-stopped
-    env_file:                   # every setting comes from .env (optional)
-      - path: .env
-        required: false
+    # Settings: edit the defaults here, or set them in a .env file next to this file
+    # (Compose reads .env automatically and its values win). See .env.example.
+    environment:
+      # First administrator, created on first start. Empty password = generated and printed in the log.
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # uid:gid the server and database run as (owns the files it writes).
+      APP_USER: ${APP_USER:-1000:1000}
+      # true when behind a reverse proxy (real client IPs, HTTPS-only cookies).
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Days before trashed items are deleted; versions kept per file; days a browser login lasts.
+      TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+      MAX_VERSIONS: ${MAX_VERSIONS:-20}
+      SESSION_DAYS: ${SESSION_DAYS:-14}
+      # Leave empty to use the built-in PostgreSQL; or postgres://user:pass@host:5432/cloudy
+      DATABASE_URL: ${DATABASE_URL:-}
     ports:
+      # APP_BIND=127.0.0.1 keeps it reachable only from this machine (reverse proxy on the same host).
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
-      # User files — the app-data volume, or a host folder such as your NFS mount.
+      # User files (DATA_PATH): the app-data volume, or an absolute host folder such as your NFS mount.
       - ${DATA_PATH:-app-data}:/data
-      # Database — keep on a local disk (not NFS).
-      - ${DB_PATH:-db-data}:/var/lib/filecloud/db
+      # Database (DB_PATH): the db-data volume or an absolute host folder — keep it on a local disk, not NFS.
+      - ${DB_PATH:-db-data}:/var/lib/cloudy/db
 
 volumes:
   app-data:

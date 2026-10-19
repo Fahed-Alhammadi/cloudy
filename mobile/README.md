@@ -1,10 +1,10 @@
-# FileCloud for Android
+# Cloudy for Android
 
-A native Android app (Kotlin, Jetpack Compose) for your FileCloud server. Requires Android 8.0 or newer.
+A native Android app (Kotlin, Jetpack Compose) for your Cloudy server. Requires Android 8.0 or newer.
 
 **Features:**
 - Browse, search, upload and download files, including photos and videos from the device. Other apps can share
-  files to FileCloud.
+  files to Cloudy.
 - Preview images, video, audio, PDF and text; open other files with any installed app.
 - Rename, move, copy, delete and favorite files, and use the trash.
 - Share by public link (with optional password) or with people and groups.
@@ -16,7 +16,8 @@ A native Android app (Kotlin, Jetpack Compose) for your FileCloud server. Requir
 
 ## Sign-in
 
-Enter the server address, username and password. The password is exchanged for a device token stored in
+Enter the server address, username and password, plus a code from your authenticator app if the account
+uses two-factor authentication (the field appears when needed). The password is exchanged for a device token stored in
 app-private storage. Each device appears on the web under *Settings → App passwords*; revoke it there to sign
 a lost phone out.
 
@@ -29,10 +30,10 @@ You need JDK 17+ (e.g. `brew install openjdk@21`) and the Android SDK (platform 
 `sdk.dir` in `android/local.properties` or `ANDROID_HOME`.
 
 ```sh
-android/build-apk.sh        # → dist/FileCloud-<version>.apk (signed) + dist/release.env
+android/build-apk.sh        # → dist/Cloudy-<version>.apk (signed) + dist/release.env
 ```
 
-On the first run the script creates a signing key: `android/filecloud-release.keystore` with its passwords in
+On the first run the script creates a signing key: `android/cloudy-release.keystore` with its passwords in
 `android/keystore.properties`. Both are git-ignored. **Back them up.** Android only installs updates signed
 with the same key.
 
@@ -44,7 +45,7 @@ with the same key.
    - by script, with an administrator's app password:
 
      ```sh
-     FILECLOUD_URL=https://cloud.example.com FILECLOUD_TOKEN=<admin app password> \
+     CLOUDY_URL=https://cloud.example.com CLOUDY_TOKEN=<admin app password> \
        android/publish-apk.sh "What's new in this version"
      ```
 
@@ -54,7 +55,7 @@ What users see:
 - On launch, and in a daily background check (with a notification), the app sees the newer version and offers
   **Update**.
 - The app downloads the APK, verifies its SHA-256 hash and opens the Android installer.
-- The first time, Android asks the user to allow FileCloud to install apps.
+- The first time, Android asks the user to allow Cloudy to install apps.
 - *More → Check for updates* checks on demand.
 - New users install the first version from `https://<your-server>/download/android`, which is linked on the
   login page.
@@ -62,7 +63,7 @@ What users see:
 ## Install manually
 
 Copy the APK to the phone and open it (allow "Install unknown apps"), or run
-`adb install dist/FileCloud-<version>.apk`.
+`adb install dist/Cloudy-<version>.apk`.
 
 ## Code map
 

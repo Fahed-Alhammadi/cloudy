@@ -1,4 +1,4 @@
-package io.filecloud.app.data
+package io.cloudy.app.data
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -22,9 +22,10 @@ import java.io.InputStream
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-class ApiException(val status: Int, message: String) : Exception(message)
+/** [twoFactor] is true when the server asks for (or rejected) a two-factor code. */
+class ApiException(val status: Int, message: String, val twoFactor: Boolean = false) : Exception(message)
 
-/** Client for the FileCloud JSON API. All calls run on the IO dispatcher. */
+/** Client for the Cloudy JSON API. All calls run on the IO dispatcher. */
 class Api(private val session: Session) {
     val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = true }
     var onUnauthorized: () -> Unit = {}
@@ -34,7 +35,7 @@ class Api(private val session: Session) {
         .readTimeout(5, TimeUnit.MINUTES)
         .writeTimeout(5, TimeUnit.MINUTES)
         .addInterceptor { chain ->
-            val b = chain.request().newBuilder().header("X-FC-Request", "1")
+            val b = chain.request().newBuilder().header("X-Cloudy-Request", "1")
             val token = session.token
             if (token != null && chain.request().header("Authorization") == null) b.header("Authorization", "Bearer $token")
             chain.proceed(b.build())
@@ -54,8 +55,10 @@ class Api(private val session: Session) {
                 val text = res.body?.string() ?: ""
                 if (!res.isSuccessful) {
                     if (res.code == 401 && !path.startsWith("/api/auth/")) onUnauthorized()
-                    val msg = runCatching { json.parseToJsonElement(text).jsonObject["error"]?.jsonPrimitive?.content }.getOrNull()
-                    throw ApiException(res.code, msg ?: "HTTP ${res.code}")
+                    val body = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+                    val msg = body?.get("error")?.jsonPrimitive?.content
+                    val twoFactor = body?.get("twoFactor")?.jsonPrimitive?.content == "true"
+                    throw ApiException(res.code, msg ?: "HTTP ${res.code}", twoFactor)
                 }
                 text
             }
@@ -70,8 +73,11 @@ class Api(private val session: Session) {
     // ---------------------------------------------------------------- auth
     suspend fun checkServer(server: String) { send("GET", "/status", server = server) }
 
-    suspend fun login(server: String, user: String, password: String, device: String): TokenResponse {
-        val body = buildJsonObject { put("user", user); put("password", password); put("deviceName", device) }
+    suspend fun login(server: String, user: String, password: String, device: String, code: String? = null): TokenResponse {
+        val body = buildJsonObject {
+            put("user", user); put("password", password); put("deviceName", device)
+            if (!code.isNullOrBlank()) put("code", code.trim())
+        }
         return decode(send("POST", "/api/auth/token", body.toString().toRequestBody(jsonType), server = server))
     }
 

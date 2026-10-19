@@ -93,8 +93,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (await handleDav(req, res, url)) return;
     if (url.pathname.startsWith('/api/')) {
       // CSRF guard: browsers cannot send custom headers cross-site without CORS.
-      if (!['GET', 'HEAD'].includes(req.method!) && req.headers['x-fc-request'] !== '1') {
-        throw new HttpError(403, 'Missing X-FC-Request header');
+      if (!['GET', 'HEAD'].includes(req.method!) && req.headers['x-cloudy-request'] !== '1') {
+        throw new HttpError(403, 'Missing X-Cloudy-Request header');
       }
       res.setHeader('X-Content-Type-Options', 'nosniff');
     }
@@ -107,7 +107,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (status === 500) console.error(e);
     if (res.headersSent) return void res.destroy();
     const message = status === 500 ? 'Internal server error' : e.message;
-    if (url.pathname.startsWith('/api/') || url.pathname === '/status') json(res, { error: message }, status);
+    if (url.pathname.startsWith('/api/') || url.pathname === '/status') json(res, { error: message, ...(e instanceof HttpError ? e.data : {}) }, status);
     else {
       res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
       res.end(message + '\n');
@@ -137,7 +137,7 @@ await ensureAdmin();
 const server = createServer((req, res) => void handle(req, res));
 server.requestTimeout = 0; // large uploads/downloads
 server.headersTimeout = 60_000;
-server.listen(config.port, () => console.log(`FileCloud ${config.version} listening on :${config.port}`));
+server.listen(config.port, () => console.log(`Cloudy ${config.version} listening on :${config.port}`));
 setInterval(jobs, 60 * 60 * 1000).unref();
 void jobs();
 

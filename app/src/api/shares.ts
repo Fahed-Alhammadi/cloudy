@@ -154,7 +154,7 @@ export function registerShares(r: Router, authed: Wrap) {
 
   // ---------------------------------------------------------------- public links
 
-  const cookieName = (s: Share) => `fc_link_${s.id}`;
+  const cookieName = (s: Share) => `cloudy_link_${s.id}`;
   const cookieValue = (s: Share) => sign(`${s.id}:${s.password_hash}`);
 
   async function loadLink(token: string): Promise<Share> {

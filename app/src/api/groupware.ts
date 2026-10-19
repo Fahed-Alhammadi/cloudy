@@ -213,7 +213,7 @@ export function registerGroupware(r: Router, authed: Wrap) {
 
   r.post('/api/calendars/:id/events', authed(async ({ req, res, params }, user) => {
     const c = await G.collectionById(G.CAL, user.id, params.id);
-    const vcal = G.parseComponent('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//FileCloud//EN\r\nBEGIN:VEVENT\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n');
+    const vcal = G.parseComponent('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cloudy//EN\r\nBEGIN:VEVENT\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n');
     const vevent = vcal.getFirstSubcomponent('vevent')!;
     const uid = randomUUID();
     vevent.addPropertyWithValue('uid', uid);

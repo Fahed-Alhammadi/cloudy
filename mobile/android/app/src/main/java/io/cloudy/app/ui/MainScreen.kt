@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,9 +60,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import io.filecloud.app.Services
-import io.filecloud.app.work.BackupSettings
-import io.filecloud.app.work.Jobs
+import io.cloudy.app.Services
+import io.cloudy.app.work.BackupSettings
+import io.cloudy.app.work.Jobs
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
@@ -162,7 +162,7 @@ fun MoreScreen(nav: NavController) {
                 modifier = Modifier.clickable { scope.launch { UpdateState.check(context, manual = true) } },
                 leadingContent = { Icon(Icons.Outlined.SystemUpdate, null) },
                 headlineContent = { Text("Check for updates") },
-                supportingContent = { Text("Version ${io.filecloud.app.data.AppUpdater.currentVersionName} (${io.filecloud.app.data.AppUpdater.currentVersionCode})") },
+                supportingContent = { Text("Version ${io.cloudy.app.data.AppUpdater.currentVersionName} (${io.cloudy.app.data.AppUpdater.currentVersionCode})") },
             )
             Text("Offline storage: ${formatSize(Services.offline.usedBytes())}", Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)

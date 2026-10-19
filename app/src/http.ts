@@ -3,9 +3,12 @@ import { config } from './config.ts';
 
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Extra fields returned with the JSON error (e.g. { twoFactor: true }). */
+  data?: Record<string, unknown>;
+  constructor(status: number, message: string, data?: Record<string, unknown>) {
     super(message);
     this.status = status;
+    this.data = data;
   }
 }
 

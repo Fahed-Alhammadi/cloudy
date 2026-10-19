@@ -85,16 +85,16 @@ function fileTable(opts) {
     // Drag rows onto folders to move them.
     tr.addEventListener('dragstart', (e) => {
       const ids = selected.has(item.id) ? [...selected] : [item.id];
-      e.dataTransfer.setData('application/x-filecloud', JSON.stringify(ids));
+      e.dataTransfer.setData('application/x-cloudy', JSON.stringify(ids));
       e.dataTransfer.effectAllowed = 'move';
     });
     if (item.isDir) {
       tr.addEventListener('dragover', (e) => {
-        if (e.dataTransfer.types.includes('application/x-filecloud')) { e.preventDefault(); tr.classList.add('drop-target'); }
+        if (e.dataTransfer.types.includes('application/x-cloudy')) { e.preventDefault(); tr.classList.add('drop-target'); }
       });
       tr.addEventListener('dragleave', () => tr.classList.remove('drop-target'));
       tr.addEventListener('drop', async (e) => {
-        const raw = e.dataTransfer.getData('application/x-filecloud');
+        const raw = e.dataTransfer.getData('application/x-cloudy');
         tr.classList.remove('drop-target');
         if (!raw) return;
         e.preventDefault();

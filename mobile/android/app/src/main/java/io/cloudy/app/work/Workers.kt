@@ -1,4 +1,4 @@
-package io.filecloud.app.work
+package io.cloudy.app.work
 
 import android.Manifest
 import android.content.ContentUris
@@ -17,9 +17,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import io.filecloud.app.MainActivity
-import io.filecloud.app.Services
-import io.filecloud.app.data.AppUpdater
+import io.cloudy.app.MainActivity
+import io.cloudy.app.Services
+import io.cloudy.app.data.AppUpdater
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -105,7 +105,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         nm.notify(1001, NotificationCompat.Builder(ctx, "updates")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("FileCloud ${release.versionName} is available")
+            .setContentTitle("Cloudy ${release.versionName} is available")
             .setContentText(release.notes.ifBlank { "Tap to update" })
             .setContentIntent(open)
             .setAutoCancel(true)

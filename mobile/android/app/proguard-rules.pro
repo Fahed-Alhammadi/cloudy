@@ -1,4 +1,4 @@
 # Keep serializable API models intact.
--keep class io.filecloud.app.data.** { *; }
+-keep class io.cloudy.app.data.** { *; }
 -keepattributes *Annotation*, InnerClasses
 -dontwarn org.slf4j.**

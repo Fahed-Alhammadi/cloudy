@@ -18,6 +18,10 @@ async function refreshMe() {
 function renderLogin(message) {
   const user = h('input', { type: 'text', name: 'username', autocomplete: 'username', required: true, autofocus: true, 'aria-label': 'Username' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
+  // Second step for accounts with two-factor authentication; shown when the server asks for it.
+  const code = h('input', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', 'aria-label': 'Authentication code', placeholder: '123 456' });
+  const codeField = h('label', { class: 'field', hidden: true }, h('span', {}, 'Authentication code'), code,
+    h('small', { class: 'muted' }, 'From your authenticator app, or one of your recovery codes.'));
   const error = h('p', { class: 'error', role: 'alert' }, message || '');
   const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Log in');
   app.replaceChildren(h('main', { class: 'login' },
@@ -26,16 +30,25 @@ function renderLogin(message) {
       btn.disabled = true;
       error.textContent = '';
       try {
-        await post('/api/login', { user: user.value.trim(), password: pass.value });
+        const body = { user: user.value.trim(), password: pass.value };
+        if (!codeField.hidden) body.code = code.value.trim();
+        await post('/api/login', body);
         await refreshMe();
       } catch (err) {
-        error.textContent = err.message;
+        if (err.body?.twoFactor && codeField.hidden) {
+          codeField.hidden = false;
+          code.focus();
+        } else {
+          error.textContent = err.message;
+          if (!codeField.hidden) code.select();
+        }
         btn.disabled = false;
       }
     } },
-      h('div', { class: 'brand big' }, icon('cloud'), 'FileCloud'),
+      h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'),
       h('label', { class: 'field' }, h('span', {}, 'Username'), user),
       h('label', { class: 'field' }, h('span', {}, 'Password'), pass),
+      codeField,
       error, btn,
       h('a', { class: 'android-link', href: '/download/android', hidden: true }, icon('download'), 'Get the Android app'))));
   get('/api/app/android').then((r) => { const a = app.querySelector('.android-link'); if (a) { a.hidden = false; a.title = `Version ${r.versionName}`; } }, () => {});
@@ -73,7 +86,7 @@ function renderShell() {
   main = h('main', { class: 'content', id: 'content', tabindex: -1 });
   const header = h('header', { class: 'topbar' },
     h('button', { class: 'icon-btn menu-toggle', 'aria-label': 'Toggle menu', onclick: () => document.body.classList.toggle('nav-open') }, icon('menu')),
-    h('a', { class: 'brand', href: '#/files' }, icon('cloud'), 'FileCloud'),
+    h('a', { class: 'brand', href: '#/files' }, icon('cloud'), 'Cloudy'),
     h('div', { class: 'search' }, icon('search'), search),
     h('button', { class: 'avatar-btn', 'aria-label': 'Account menu', onclick: (e) => showMenu(e.currentTarget, [
       { label: ctx.me.displayName, icon: 'contacts', onclick: () => (location.hash = '#/settings') },
@@ -104,7 +117,7 @@ async function route() {
       case 'admin': await renderAdmin(main, ctx); break;
       default: location.hash = '#/files';
     }
-    document.title = `${nav.querySelector('a.active span')?.textContent || 'Files'} – FileCloud`;
+    document.title = `${nav.querySelector('a.active span')?.textContent || 'Files'} – Cloudy`;
   } catch (e) {
     if (e.status === 404 && view === 'files') location.hash = '#/files';
     else if (e.status !== 401) showError(e);
@@ -114,6 +127,6 @@ async function route() {
 }
 
 window.addEventListener('hashchange', route);
-window.addEventListener('fc:unauthorized', () => { ctx.me = null; renderLogin('Your session has expired. Please log in again.'); });
+window.addEventListener('cloudy:unauthorized', () => { ctx.me = null; renderLogin('Your session has expired. Please log in again.'); });
 
 get('/api/me').then((me) => { ctx.me = me; renderShell(); route(); }, () => renderLogin());

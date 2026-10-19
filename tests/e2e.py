@@ -1,4 +1,4 @@
-"""End-to-end smoke test for FileCloud. Usage: python3 -I e2e.py http://localhost:8088 admin <password>"""
+"""End-to-end smoke test for Cloudy. Usage: python3 -I e2e.py http://localhost:8088 admin <password>"""
 import base64, http.cookiejar, io, json, os, sys, urllib.request, urllib.error, zipfile, re, uuid
 
 BASE, ADMIN, ADMIN_PW = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -17,7 +17,7 @@ class Client:
         self.op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
         self.basic = basic
     def req(self, method, path, body=None, headers=None, raw=False):
-        h = {'X-FC-Request': '1'}
+        h = {'X-Cloudy-Request': '1'}
         if self.basic: h['Authorization'] = 'Basic ' + base64.b64encode(self.basic.encode()).decode()
         h.update(headers or {})
         data = body
@@ -46,7 +46,7 @@ root = me['rootId']
 check('me has rootId', s == 200 and root)
 s, _ = Client().req('GET', '/api/me')
 check('anonymous /api/me is 401', s == 401)
-s, _ = admin.req('POST', '/api/nodes/%d/folders' % root, {'name': 'x'}, headers={'X-FC-Request': '0'})
+s, _ = admin.req('POST', '/api/nodes/%d/folders' % root, {'name': 'x'}, headers={'X-Cloudy-Request': '0'})
 check('CSRF header required', s == 403)
 
 print('== users & groups')
@@ -261,7 +261,7 @@ check('JSON edit visible over CalDAV', b'SUMMARY:Renamed' in body and b'RRULE:FR
 dav.req('DELETE', f'/dav/calendars/{ADMIN}/personal/{uid}.ics')
 s, xml = dav.req('REPORT', f'/dav/calendars/{ADMIN}/personal/', sc.replace(tok0, tok1))
 check('sync-collection reports deletion', f'{uid}.ics' in xml and '404' in xml, xml)
-s, xml = dav.req('REPORT', f'/dav/calendars/{ADMIN}/personal/', sc.replace(tok0, 'http://filecloud.local/sync/999999'))
+s, xml = dav.req('REPORT', f'/dav/calendars/{ADMIN}/personal/', sc.replace(tok0, 'http://cloudy.local/sync/999999'))
 check('invalid sync token -> 403', s == 403 and 'valid-sync-token' in xml)
 
 print('== CardDAV')
@@ -320,6 +320,63 @@ check('publishing requires admin', s in (401, 403))
 s, _ = admin.req('DELETE', f"/api/admin/app/android/{rel['id']}")
 s, _ = Client().req('GET', '/api/app/android')
 check('release deleted', s == 404)
+
+print('== two-factor authentication')
+import hmac, struct, time
+def totp(secret_b32, step_offset=0):
+    key = base64.b32decode(secret_b32 + '=' * (-len(secret_b32) % 8))
+    step = int(time.time()) // 30 + step_offset
+    h = hmac.new(key, struct.pack('>Q', step), 'sha1').digest()
+    o = h[-1] & 15
+    return '%06d' % ((struct.unpack('>I', h[o:o + 4])[0] & 0x7fffffff) % 1000000)
+carol = 'carol' + uuid.uuid4().hex[:6]
+admin.req('POST', '/api/admin/users', {'id': carol, 'password': 'carol-pass-123'})
+cc = Client()
+cc.req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123'})
+s, setup = cc.req('POST', '/api/me/2fa/setup')
+check('2FA setup returns secret + QR', s == 200 and setup['secret'] and '<svg' in setup['qrSvg'] and setup['uri'].startswith('otpauth://totp/'), setup)
+s, _ = cc.req('POST', '/api/me/2fa/enable', {'code': '000000' if totp(setup['secret']) != '000000' else '111111'})
+check('2FA enable rejects wrong code', s == 400)
+s, en = cc.req('POST', '/api/me/2fa/enable', {'code': totp(setup['secret'])})
+check('2FA enable returns 10 recovery codes', s == 200 and len(en['recoveryCodes']) == 10, en)
+s, me = cc.req('GET', '/api/me')
+check('me reports twoFactor', me.get('twoFactor') is True)
+s, r = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123'})
+check('login without code asks for 2FA', s == 401 and r.get('twoFactor') is True, r)
+s, r = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123', 'code': '12345x'})
+check('login with bad code rejected', s == 401 and r.get('twoFactor') is True)
+s, r = Client().req('POST', '/api/login', {'user': carol, 'password': 'wrong', 'code': totp(setup['secret'])})
+check('code does not bypass wrong password', s == 401 and not r.get('twoFactor'))
+# The enable step consumed the current code; the next step's code is valid (±1 step drift window).
+good = totp(setup['secret'], 1)
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123', 'code': good})
+check('login with authenticator code', s == 200)
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123', 'code': good})
+check('same code cannot be replayed', s == 401)
+rc = en['recoveryCodes'][0]
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123', 'code': rc.upper()})
+check('login with recovery code', s == 200)
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123', 'code': rc})
+check('recovery code works only once', s == 401)
+s, r = Client().req('POST', '/api/auth/token', {'user': carol, 'password': 'carol-pass-123', 'deviceName': 'phone'})
+check('device token also needs 2FA', s == 401 and r.get('twoFactor') is True)
+s, r = Client().req('POST', '/api/auth/token', {'user': carol, 'password': 'carol-pass-123', 'deviceName': 'phone', 'code': en['recoveryCodes'][1]})
+check('device token with second factor', s == 201 and r.get('token'))
+s, _ = Client(basic=f'{carol}:carol-pass-123').req('PROPFIND', f'/dav/files/{carol}/', headers={'Depth': '0'})
+check('DAV rejects account password when 2FA is on', s == 401)
+s, _ = Client(basic=f"{carol}:{r['token']}").req('PROPFIND', f'/dav/files/{carol}/', headers={'Depth': '0'})
+check('DAV accepts app password when 2FA is on', s == 207)
+s, _ = cc.req('POST', '/api/me/2fa/disable', {'password': 'wrong'})
+check('disabling 2FA needs the password', s == 403)
+s, _ = admin.req('PATCH', f'/api/admin/users/{carol}', {'resetTwoFactor': True})
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123'})
+check('admin reset turns 2FA off', s == 200)
+s, setup2 = cc.req('POST', '/api/me/2fa/setup')
+cc.req('POST', '/api/me/2fa/enable', {'code': totp(setup2['secret'])})
+s, _ = cc.req('POST', '/api/me/2fa/disable', {'password': 'carol-pass-123'})
+s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123'})
+check('user can turn 2FA off', s == 200)
+admin.req('DELETE', f'/api/admin/users/{carol}')
 
 print('== cleanup')
 s, _ = admin.req('DELETE', f'/api/admin/users/{bob}')

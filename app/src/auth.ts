@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { config } from './config.ts';
 import { q, one } from './db.ts';
 import { HttpError, parseCookies, setCookie, clientIp } from './http.ts';
+import { verifyTotp, normalizeRecoveryCode } from './totp.ts';
 
 export interface User {
   id: string;
@@ -11,10 +12,11 @@ export interface User {
   is_admin: boolean;
   disabled: boolean;
   quota_bytes: number | null;
+  totp_enabled: boolean;
 }
 
-const USER_COLS = 'id, display_name, email, is_admin, disabled, quota_bytes';
-const SESSION_COOKIE = 'fc_session';
+const USER_COLS = 'id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled';
+const SESSION_COOKIE = 'cloudy_session';
 
 function scrypt(pw: string, salt: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) =>
@@ -78,18 +80,45 @@ export async function sign(value: string): Promise<string> {
 }
 
 // ---- sessions (browser) ----
-export async function login(req: IncomingMessage, id: string, password: string): Promise<User> {
+/**
+ * Password login (browser session or device token). Users with two-factor enabled must also
+ * send `code`: a 6-digit authenticator code or one of their recovery codes. A missing code is
+ * answered with 401 + { twoFactor: true } so clients know to ask for it.
+ */
+export async function login(req: IncomingMessage, id: string, password: string, code?: string): Promise<User> {
   checkRate(req);
-  const row = await one<User & { password_hash: string }>(
-    `SELECT ${USER_COLS}, password_hash FROM users WHERE id = $1`,
+  const row = await one<User & { password_hash: string; totp_secret: string | null; totp_last_step: number }>(
+    `SELECT ${USER_COLS}, password_hash, totp_secret, totp_last_step FROM users WHERE id = $1`,
     [id],
   );
   if (!row || row.disabled || !(await verifyPassword(password, row.password_hash))) {
     recordFailure(req);
     throw new HttpError(401, 'Invalid username or password');
   }
-  const { password_hash: _, ...user } = row;
+  if (row.totp_enabled) await checkSecondFactor(req, row, code);
+  const { password_hash: _, totp_secret: _s, totp_last_step: _l, ...user } = row;
   return user;
+}
+
+async function checkSecondFactor(
+  req: IncomingMessage,
+  row: { id: string; totp_secret: string | null; totp_last_step: number },
+  code: string | undefined,
+): Promise<void> {
+  const c = (code ?? '').trim();
+  if (!c) throw new HttpError(401, 'Enter the code from your authenticator app', { twoFactor: true });
+  const digits = c.replace(/\s/g, '');
+  if (/^\d{6}$/.test(digits) && row.totp_secret) {
+    const step = verifyTotp(row.totp_secret, digits, row.totp_last_step);
+    // Conditional update: two parallel logins can't both use the same code.
+    if (step !== null && (await one(`UPDATE users SET totp_last_step = $2 WHERE id = $1 AND totp_last_step < $2 RETURNING id`, [row.id, step]))) return;
+  } else {
+    const used = await one(`DELETE FROM recovery_codes WHERE user_id = $1 AND code_hash = $2 RETURNING user_id`,
+      [row.id, sha256(normalizeRecoveryCode(c))]);
+    if (used) return;
+  }
+  recordFailure(req);
+  throw new HttpError(401, 'Invalid two-factor code', { twoFactor: true });
 }
 
 export async function createSession(req: IncomingMessage, res: ServerResponse, userId: string): Promise<void> {
@@ -174,7 +203,7 @@ export async function basicUser(req: IncomingMessage): Promise<User | null> {
       `UPDATE app_passwords SET last_used_at = now() WHERE user_id = $1 AND token_hash = $2 RETURNING id`,
       [id, sha256(pw)],
     );
-    ok = !!app || (await verifyPassword(pw, row.password_hash));
+    ok = !!app || (!row.totp_enabled && (await verifyPassword(pw, row.password_hash)));
   }
   if (!ok || !row) {
     recordFailure(req);

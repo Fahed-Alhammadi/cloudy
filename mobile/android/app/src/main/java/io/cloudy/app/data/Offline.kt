@@ -1,4 +1,4 @@
-package io.filecloud.app.data
+package io.cloudy.app.data
 
 import android.content.Context
 import kotlinx.serialization.encodeToString

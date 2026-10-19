@@ -22,7 +22,7 @@ const card = (n: string) => key(NS.card, n);
 const cs = (n: string) => key(NS.cs, n);
 const ic = (n: string) => key(NS.ic, n);
 
-const syncToken = (c: Collection) => `http://filecloud.local/sync/${c.ctag}`;
+const syncToken = (c: Collection) => `http://cloudy.local/sync/${c.ctag}`;
 
 function depth(req: IncomingMessage, dflt: 0 | 1 = 1): 0 | 1 {
   const h = String(req.headers.depth ?? '').toLowerCase();
@@ -50,7 +50,7 @@ export async function handleDav(req: IncomingMessage, res: ServerResponse, url: 
   }
   const user = await basicUser(req);
   if (!user) {
-    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="FileCloud", charset="UTF-8"', 'Content-Length': 0 });
+    res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Cloudy", charset="UTF-8"', 'Content-Length': 0 });
     res.end();
     return true;
   }
@@ -105,7 +105,7 @@ async function discovery(req: IncomingMessage, res: ServerResponse, user: User, 
   if (req.method === 'REPORT') return ms.send(res);
   const uid = encodeURIComponent(user.id);
   if (!area) {
-    await ms.add('/dav/', plainCollection(user, 'FileCloud'), pr);
+    await ms.add('/dav/', plainCollection(user, 'Cloudy'), pr);
     if (depth(req) === 1) {
       for (const a of ['files', 'calendars', 'addressbooks', 'principals']) {
         await ms.add(`/dav/${a}/${uid}/`, a === 'principals' ? principalProps(user) : plainCollection(user, a), pr);
@@ -428,7 +428,7 @@ function mergeCalendars(objs: DavObject[]): string {
     const m = /BEGIN:VCALENDAR\r?\n([\s\S]*?)END:VCALENDAR/.exec(o.data);
     if (m) inner.push(m[1].replace(/^(VERSION|PRODID|CALSCALE|METHOD):.*\r?\n/gm, '').trim());
   }
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//FileCloud//EN', ...inner, 'END:VCALENDAR', ''].join('\r\n');
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cloudy//EN', ...inner, 'END:VCALENDAR', ''].join('\r\n');
 }
 
 function parseCalDavTime(s: string | undefined): Date | undefined {

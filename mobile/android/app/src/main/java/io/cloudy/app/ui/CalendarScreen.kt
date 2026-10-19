@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
@@ -61,10 +61,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.filecloud.app.Services
-import io.filecloud.app.data.CalEvent
-import io.filecloud.app.data.DavCollection
-import io.filecloud.app.data.EventInput
+import io.cloudy.app.Services
+import io.cloudy.app.data.CalEvent
+import io.cloudy.app.data.DavCollection
+import io.cloudy.app.data.EventInput
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant

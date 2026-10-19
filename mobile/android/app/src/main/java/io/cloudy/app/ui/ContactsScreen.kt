@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.content.Intent
 import android.net.Uri
@@ -54,9 +54,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.filecloud.app.Services
-import io.filecloud.app.data.Contact
-import io.filecloud.app.data.DavCollection
+import io.cloudy.app.Services
+import io.cloudy.app.data.Contact
+import io.cloudy.app.data.DavCollection
 import kotlinx.coroutines.launch
 
 private fun initials(c: Contact) = c.fn.split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase()

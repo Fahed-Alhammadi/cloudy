@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
@@ -64,9 +64,9 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
-import io.filecloud.app.Services
-import io.filecloud.app.data.FileNode
-import io.filecloud.app.data.TrashItem
+import io.cloudy.app.Services
+import io.cloudy.app.data.FileNode
+import io.cloudy.app.data.TrashItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

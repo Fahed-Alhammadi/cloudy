@@ -1,6 +1,6 @@
-# FileCloud architecture
+# Cloudy architecture
 
-FileCloud is a self-hosted cloud for files, sharing, calendars and contacts. It has three parts:
+Cloudy is a self-hosted cloud for files, sharing, calendars and contacts. It has three parts:
 - one container running the Node.js server and its own PostgreSQL database;
 - a browser app written in plain HTML5;
 - a native Android app.
@@ -10,7 +10,7 @@ This document explains how the pieces fit together and why they are built the wa
 ## 1. Components
 
 ```
-                 ┌───────────────── FileCloud server (Node 24, TypeScript) ─────────────────┐
+                 ┌───────────────── Cloudy server (Node 24, TypeScript) ─────────────────┐
 browser ───────▶ │  /            static HTML5 app (public/)                                   │
 Android app ───▶ │  /api/*       JSON API (session cookie or device token)                    │
                  │  /api/public  public share links (token + optional password)               │
@@ -25,13 +25,13 @@ WebDAV / CalDAV  │  /dav/*       WebDAV files, CalDAV calendars, CardDAV addre
 ```
 
 **Container layout.**
-- `tini` runs as process 1 and starts `filecloud-entrypoint`.
+- `tini` runs as process 1 and starts `cloudy-entrypoint`.
 - The entrypoint, still as root, does the setup:
   - creates a named user for `APP_USER` (uid:gid);
   - fixes ownership of the database folder;
   - runs `initdb` the first time.
 - It then drops to `APP_USER` and starts PostgreSQL 17, which listens only on the Unix socket
-  `/run/filecloud`, with trust authentication and no TCP port.
+  `/run/cloudy`, with trust authentication and no TCP port.
 - Once the database answers, it starts the Node server.
 - If either process exits, the other is stopped and the container exits, so Docker's restart policy restarts
   both together.
@@ -103,16 +103,22 @@ what changed since their last sync.
 | Android app | `POST /api/auth/token` → device token, sent as `Authorization: Bearer …` |
 | WebDAV / CalDAV / CardDAV apps | HTTP Basic with the account password or an app password |
 
+- **Two-factor authentication** uses TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step), implemented in `totp.ts`.
+  - Setup keeps the secret pending until a valid code confirms it. Then 10 single-use recovery codes are issued,
+    stored as SHA-256 hashes.
+  - At login, a missing code returns `401 {twoFactor: true}`, so clients show the code field.
+  - The last used time step is stored, so a code can't be replayed.
+  - With 2FA on, HTTP Basic accepts only app passwords, never the account password.
 - Device tokens are app passwords. Users see them, and can revoke them, under *Settings → App passwords*.
 - Passwords are hashed with scrypt. Tokens are stored as SHA-256 hashes.
 - Failed sign-ins are rate-limited per client IP. Behind a proxy, `TRUST_PROXY=true` makes the real client IP
   visible.
-- Every state-changing `/api` call must carry the `X-FC-Request: 1` header. A cross-site form can't send it, so
+- Every state-changing `/api` call must carry the `X-Cloudy-Request: 1` header. A cross-site form can't send it, so
   this blocks CSRF.
 
 ## 6. Updates
 
-**Server.** Each `v*` tag publishes `ghcr.io/fahed-alhammadi/filecloud:latest`. Run
+**Server.** Each `v*` tag publishes `ghcr.io/fahed-alhammadi/cloudy:latest`. Run
 `docker compose pull && docker compose up -d` to update.
 - `/status` reports the running version.
 - The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every

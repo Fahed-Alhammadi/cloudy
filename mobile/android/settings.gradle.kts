@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "FileCloud"
+rootProject.name = "Cloudy"
 include(":app")

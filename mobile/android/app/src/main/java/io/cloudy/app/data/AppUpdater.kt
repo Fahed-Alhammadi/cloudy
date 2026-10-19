@@ -1,4 +1,4 @@
-package io.filecloud.app.data
+package io.cloudy.app.data
 
 import android.content.Context
 import android.content.Intent
@@ -6,8 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import io.filecloud.app.BuildConfig
-import io.filecloud.app.Services
+import io.cloudy.app.BuildConfig
+import io.cloudy.app.Services
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -41,8 +41,8 @@ object AppUpdater {
 
     suspend fun download(context: Context, release: AppRelease, onProgress: (Float) -> Unit): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        dir.listFiles()?.filter { it.name != "FileCloud-${release.versionCode}.apk" }?.forEach { it.delete() }
-        val dest = File(dir, "FileCloud-${release.versionCode}.apk")
+        dir.listFiles()?.filter { it.name != "Cloudy-${release.versionCode}.apk" }?.forEach { it.delete() }
+        val dest = File(dir, "Cloudy-${release.versionCode}.apk")
         if (dest.exists() && sha256(dest) == release.sha256) return@withContext dest
         Services.api.downloadUrlTo(Services.api.url(release.url), dest) { got ->
             if (release.size > 0) onProgress((got.toFloat() / release.size).coerceIn(0f, 1f))

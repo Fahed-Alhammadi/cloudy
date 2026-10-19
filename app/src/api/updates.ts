@@ -62,7 +62,7 @@ export function registerUpdates(r: Router, admin: Wrap) {
     res.writeHead(200, {
       'Content-Type': 'application/vnd.android.package-archive',
       'Content-Length': st.size,
-      'Content-Disposition': contentDisposition('attachment', `FileCloud-${rel.version_name}.apk`),
+      'Content-Disposition': contentDisposition('attachment', `Cloudy-${rel.version_name}.apk`),
       'X-Content-SHA256': rel.sha256,
       'Cache-Control': 'no-cache',
     });

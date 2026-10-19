@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.Manifest
 import android.content.Context
@@ -23,8 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import io.filecloud.app.data.AppRelease
-import io.filecloud.app.data.AppUpdater
+import io.cloudy.app.data.AppRelease
+import io.cloudy.app.data.AppUpdater
 import kotlinx.coroutines.launch
 
 /** Shared update state so the More screen can trigger the same dialog. */
@@ -40,7 +40,7 @@ object UpdateState {
         release = r
         val skipped = context.getSharedPreferences("updates", Context.MODE_PRIVATE).getInt("skipped", 0)
         when {
-            r == null -> if (manual) toast(context, "FileCloud is up to date (${AppUpdater.currentVersionName})")
+            r == null -> if (manual) toast(context, "Cloudy is up to date (${AppUpdater.currentVersionName})")
             manual || r.versionCode > skipped -> visible = true
         }
     }
@@ -95,11 +95,11 @@ fun UpdatePrompt() {
         title = { Text("Update available") },
         text = {
             Column {
-                Text("FileCloud ${release.versionName} is available (you have ${AppUpdater.currentVersionName}).")
+                Text("Cloudy ${release.versionName} is available (you have ${AppUpdater.currentVersionName}).")
                 if (release.notes.isNotBlank()) Text(release.notes, Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodySmall)
                 if (release.size > 0) Text(formatSize(release.size), Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.outline,
                     style = MaterialTheme.typography.bodySmall)
-                if (needsPermission) Text("Allow FileCloud to install apps in the screen that opened, then tap Update again.",
+                if (needsPermission) Text("Allow Cloudy to install apps in the screen that opened, then tap Update again.",
                     Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) }
             }

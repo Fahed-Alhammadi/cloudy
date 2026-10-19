@@ -1,4 +1,4 @@
-package io.filecloud.app.data
+package io.cloudy.app.data
 
 import kotlinx.serialization.Serializable
 

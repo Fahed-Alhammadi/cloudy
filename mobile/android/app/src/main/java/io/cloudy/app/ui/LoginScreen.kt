@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
@@ -36,8 +36,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import io.filecloud.app.Services
-import io.filecloud.app.work.Jobs
+import io.cloudy.app.Services
+import io.cloudy.app.work.Jobs
 import kotlinx.coroutines.launch
 
 @Composable
@@ -47,6 +47,8 @@ fun LoginScreen() {
     var server by remember { mutableStateOf(Services.session.lastServer.ifEmpty { "https://" }) }
     var user by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var needCode by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -58,11 +60,13 @@ fun LoginScreen() {
         scope.launch {
             try {
                 Services.api.checkServer(url)
-                val r = Services.api.login(url, user.trim(), password, "${Build.MANUFACTURER} ${Build.MODEL}")
+                val r = Services.api.login(url, user.trim(), password, "${Build.MANUFACTURER} ${Build.MODEL}", if (needCode) code else null)
                 Services.session.signIn(url, r.token, r.user)
                 Jobs.schedule(context)
+            } catch (e: io.cloudy.app.data.ApiException) {
+                if (e.twoFactor && !needCode) needCode = true else error = e.message
             } catch (e: Exception) {
-                error = if (e is io.filecloud.app.data.ApiException) e.message else "Cannot reach server: ${e.message}"
+                error = "Cannot reach server: ${e.message}"
             } finally {
                 busy = false
             }
@@ -78,7 +82,7 @@ fun LoginScreen() {
             Column(Modifier.widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 12.dp)) {
                     Icon(Icons.Filled.Cloud, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
-                    Text("  FileCloud", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("  Cloudy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
                 OutlinedTextField(server, { server = it }, label = { Text("Server address") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next))
@@ -88,6 +92,12 @@ fun LoginScreen() {
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (!busy) submit() }))
+                if (needCode) {
+                    OutlinedTextField(code, { code = it }, label = { Text("Authentication code") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        supportingText = { Text("From your authenticator app, or a recovery code") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Go),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (!busy) submit() }))
+                }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(onClick = ::submit, enabled = !busy && user.isNotBlank() && password.isNotEmpty() && server.length > 8, modifier = Modifier.fillMaxWidth()) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Log in")

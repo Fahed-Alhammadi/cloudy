@@ -26,7 +26,7 @@ jobs:
         run: python3 tests/e2e.py http://localhost:8080 admin ci-admin-password
       - name: Logs on failure
         if: failure()
-        run: docker compose -f deploy/docker-compose.yml --env-file .env logs filecloud
+        run: docker compose -f deploy/docker-compose.yml --env-file .env logs cloudy
 
   android:
     runs-on: ubuntu-24.04

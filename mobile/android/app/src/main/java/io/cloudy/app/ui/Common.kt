@@ -1,4 +1,4 @@
-package io.filecloud.app.ui
+package io.cloudy.app.ui
 
 import android.content.Context
 import android.content.Intent
@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.filecloud.app.data.FileNode
+import io.cloudy.app.data.FileNode
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -47,7 +47,7 @@ import java.time.format.FormatStyle
 val Accent = Color(0xFF0B6BCB)
 
 @Composable
-fun FileCloudTheme(content: @Composable () -> Unit) {
+fun CloudyTheme(content: @Composable () -> Unit) {
     val colors = if (isSystemInDarkTheme())
         darkColorScheme(primary = Color(0xFF4A9DF0), onPrimary = Color(0xFF0A1220), primaryContainer = Color(0xFF1D3350),
             background = Color(0xFF14181F), surface = Color(0xFF14181F), surfaceContainer = Color(0xFF1B2029))

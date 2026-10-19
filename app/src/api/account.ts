@@ -8,13 +8,33 @@ import {
 import type { User } from '../auth.ts';
 import { createUser, deleteUser, setGroups, userJson, USER_ID_RE } from '../users.ts';
 import { rootOf } from '../files.ts';
+import { newSecret, otpauthUri, verifyTotp, newRecoveryCodes, normalizeRecoveryCode } from '../totp.ts';
+import QRCode from 'qrcode';
+
+async function requirePassword(userId: string, password: unknown): Promise<void> {
+  const row = await one<{ password_hash: string }>(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
+  if (!row || !(await verifyPassword(String(password ?? ''), row.password_hash))) throw new HttpError(403, 'Wrong password');
+}
+
+async function replaceRecoveryCodes(userId: string): Promise<string[]> {
+  const codes = newRecoveryCodes();
+  await q(`DELETE FROM recovery_codes WHERE user_id = $1`, [userId]);
+  for (const c of codes) await q(`INSERT INTO recovery_codes (user_id, code_hash) VALUES ($1, $2)`, [userId, sha256(normalizeRecoveryCode(c))]);
+  return codes;
+}
+
+async function resetTwoFactor(userId: string): Promise<void> {
+  await q(`UPDATE users SET totp_enabled = false, totp_secret = NULL, totp_pending = NULL, totp_last_step = 0 WHERE id = $1`, [userId]);
+  await q(`DELETE FROM recovery_codes WHERE user_id = $1`, [userId]);
+  forgetBasicCache();
+}
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
 
 export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => Promise<void>, admin: (h: Authed) => (ctx: Ctx) => Promise<void>) {
   r.post('/api/login', async ({ req, res }) => {
     const body = await readJson(req);
-    const user = await login(req, String(body.user ?? ''), String(body.password ?? ''));
+    const user = await login(req, String(body.user ?? ''), String(body.password ?? ''), body.code == null ? undefined : String(body.code));
     await createSession(req, res, user.id);
     json(res, await userJson(user));
   });
@@ -22,7 +42,7 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
   // Native apps: exchange credentials for a long-lived device token (an app password).
   r.post('/api/auth/token', async ({ req, res }) => {
     const body = await readJson(req);
-    const user = await login(req, String(body.user ?? ''), String(body.password ?? ''));
+    const user = await login(req, String(body.user ?? ''), String(body.password ?? ''), body.code == null ? undefined : String(body.code));
     const device = String(body.deviceName ?? '').trim().slice(0, 60) || 'Mobile device';
     const token = await createAppToken(user.id, `App: ${device}`);
     json(res, { token, user: { ...(await userJson(user)), rootId: (await rootOf(user.id)).id } }, 201);
@@ -49,6 +69,42 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
     await q(`UPDATE users SET display_name = COALESCE($2, display_name), email = COALESCE($3, email) WHERE id = $1`,
       [user.id, typeof b.displayName === 'string' ? b.displayName.trim() || user.id : null,
        typeof b.email === 'string' ? b.email.trim() : null]);
+    noContent(res);
+  }));
+
+  // ---------------------------------------------------------------- two-factor authentication
+  // 1. setup: create a secret (kept pending) and return it with a QR code for the authenticator app.
+  r.post('/api/me/2fa/setup', authed(async ({ res }, user) => {
+    if (user.totp_enabled) throw new HttpError(409, 'Two-factor authentication is already on');
+    const secret = newSecret();
+    await q(`UPDATE users SET totp_pending = $2 WHERE id = $1`, [user.id, secret]);
+    const uri = otpauthUri('Cloudy', user.id, secret);
+    const qrSvg = await QRCode.toString(uri, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
+    json(res, { secret, uri, qrSvg });
+  }));
+
+  // 2. enable: confirm with a code from the app; returns one-time recovery codes (shown once).
+  r.post('/api/me/2fa/enable', authed(async ({ req, res }, user) => {
+    const code = String((await readJson(req)).code ?? '').replace(/\s/g, '');
+    const row = await one<{ totp_pending: string | null }>(`SELECT totp_pending FROM users WHERE id = $1`, [user.id]);
+    if (!row?.totp_pending) throw new HttpError(400, 'Start the setup first');
+    const step = verifyTotp(row.totp_pending, code);
+    if (step === null) throw new HttpError(400, 'That code is not valid — check the time on your phone and try again');
+    await q(`UPDATE users SET totp_secret = totp_pending, totp_pending = NULL, totp_enabled = true, totp_last_step = $2 WHERE id = $1`,
+      [user.id, step]);
+    forgetBasicCache();
+    json(res, { recoveryCodes: await replaceRecoveryCodes(user.id) });
+  }));
+
+  r.post('/api/me/2fa/recovery-codes', authed(async ({ req, res }, user) => {
+    await requirePassword(user.id, (await readJson(req)).password);
+    if (!user.totp_enabled) throw new HttpError(400, 'Two-factor authentication is off');
+    json(res, { recoveryCodes: await replaceRecoveryCodes(user.id) });
+  }));
+
+  r.post('/api/me/2fa/disable', authed(async ({ req, res }, user) => {
+    await requirePassword(user.id, (await readJson(req)).password);
+    await resetTwoFactor(user.id);
     noContent(res);
   }));
 
@@ -93,7 +149,7 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
 
   // ---------------------------------------------------------------- admin
   r.get('/api/admin/users', admin(async ({ res }) => {
-    const users = await q<User>(`SELECT id, display_name, email, is_admin, disabled, quota_bytes FROM users ORDER BY id`);
+    const users = await q<User>(`SELECT id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled FROM users ORDER BY id`);
     json(res, await Promise.all(users.map(userJson)));
   }));
 
@@ -126,6 +182,8 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
       await q(`DELETE FROM sessions WHERE user_id = $1`, [params.id]);
     }
     if (Array.isArray(b.groups)) await setGroups(params.id, b.groups);
+    // Lost phone: an administrator can turn two-factor off so the user can sign in and set it up again.
+    if (b.resetTwoFactor === true) await resetTwoFactor(params.id);
     forgetBasicCache();
     noContent(res);
   }));

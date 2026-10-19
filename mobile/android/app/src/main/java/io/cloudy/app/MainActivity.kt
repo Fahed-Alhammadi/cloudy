@@ -1,4 +1,4 @@
-package io.filecloud.app
+package io.cloudy.app
 
 import android.content.Intent
 import android.net.Uri
@@ -10,12 +10,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.IntentCompat
-import io.filecloud.app.ui.FileCloudTheme
-import io.filecloud.app.ui.LoginScreen
-import io.filecloud.app.ui.MainScreen
+import io.cloudy.app.ui.CloudyTheme
+import io.cloudy.app.ui.LoginScreen
+import io.cloudy.app.ui.MainScreen
 
 class MainActivity : ComponentActivity() {
-    /** Files handed to us via "Share to FileCloud"; the Files screen offers to upload them. */
+    /** Files handed to us via "Share to Cloudy"; the Files screen offers to upload them. */
     val sharedUris = mutableStateOf<List<Uri>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,7 +24,7 @@ class MainActivity : ComponentActivity() {
         Services.api.onUnauthorized = { runOnUiThread { Services.session.signOut() } }
         handleShare(intent)
         setContent {
-            FileCloudTheme {
+            CloudyTheme {
                 val user by Services.session.user.collectAsStateWithLifecycle()
                 if (user == null || Services.session.token == null) LoginScreen()
                 else MainScreen(sharedUris)
