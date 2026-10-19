@@ -6,15 +6,15 @@ native Android app with over-the-air updates. Ships as ONE container (Node 24 se
 started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/reverse proxy is external.
 
 ## Structure
-- `docker-compose.yml`, `.env.example` — service `filecloud` (`env_file: .env`, builds `app/`) + optional `updater` (profile `autoupdate`); `.env` is git-ignored.
+- `docker-compose.yml`, `.env.example` — service `filecloud` from `ghcr.io/fahed-alhammadi/filecloud:latest` (`env_file: .env`); update with `docker compose pull && docker compose up -d`; `.env` is git-ignored.
 - `app/Dockerfile`, `app/docker/` — all-in-one image: `entrypoint.sh` (root → user setup, initdb, start postgres on the
   `/run/filecloud` socket, then node as APP_USER; supervises both), `pg_hba.conf` (local trust only).
-- `deploy/docker-compose.yml` — standalone server deployment from `ghcr.io/fahed-alhammadi/filecloud:latest` (no build; inline updater loop). Keep in sync with the root compose.
-- `scripts/auto-update.sh` — loop run by the `updater` service: `compose pull app` + recreate when the image changed.
+- `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
+  `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
-- `docs/ARCHITECTURE.md` — design notes. `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
+- `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
 - `app/src/server.ts` — entry: HTTP dispatch, CSRF guard, static app serving, hourly jobs (trash/upload/session expiry).
-- `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json) and `updateRepo`.
+- `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json).
 - `app/src/schema.sql` — whole DB schema, applied idempotently at every start (no migration tool).
 - `app/src/files.ts` — file model: node tree in Postgres, immutable blobs on disk, size/etag propagation,
   trash, versions, quota, share-based access checks. All file mutations go through here.
@@ -24,7 +24,7 @@ started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/rev
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
   chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`, `updates.ts`
-  (server update check, Android release publishing, `/download/android`).
+  (Android release publishing, `/api/app/android`, `/download/android`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
 - `mobile/android/` — Kotlin/Compose app `io.filecloud.app`: `data/` (Api, Session, Offline, AppUpdater), `work/Workers.kt`
   (photo backup, offline sync, daily update check), `ui/` screens. `build-apk.sh` → `mobile/dist/`; `publish-apk.sh` → server.
@@ -35,9 +35,10 @@ Web: vanilla JS modules, `<dialog>`, drag-and-drop, XHR chunk upload. Android: K
 OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35, minSdk 26.
 
 ## Commands
-- Run stack: `cp .env.example .env` (edit) → `docker compose up -d --build`; UI on `http://localhost:${APP_PORT:-8080}`
-- With auto-updates: set `FILECLOUD_IMAGE` to a registry image, then `docker compose --profile autoupdate up -d`
-- Logs: `docker compose logs -f app` · Reset all data: `docker compose down -v`
+- Run published image: `cp .env.example .env` (edit) → `docker compose up -d`; UI on `http://localhost:${APP_PORT:-8080}`
+- Build from source: `docker compose -f deploy/docker-compose.yml --env-file .env up -d --build`
+- Update server: `docker compose pull && docker compose up -d`
+- Logs: `docker logs -f filecloud` · Reset all data: `docker compose down -v`
 - Type-check: `cd app && npm install && npm run typecheck`
 - E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>`
 - Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 35); publish OTA:
@@ -63,6 +64,10 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-19: Removed server OTA (updater service, GitHub release check, `UPDATE_REPO`/`UPDATE_INTERVAL`); server updates are
+  `docker compose pull`. OTA kept for the Android APK only.
+- 2026-10-19: Swapped compose files: root `docker-compose.yml` = published image (+ inline updater); `deploy/docker-compose.yml`
+  = build from source. Removed `scripts/auto-update.sh`; CI builds via the deploy file.
 - 2026-10-19: Single all-in-one container (server + embedded PostgreSQL 17 via tini/entrypoint); `DB_PASSWORD` removed,
   `DB_PATH`/`DATABASE_URL` added, compose service renamed `filecloud` with `env_file: .env`. Existing volumes migrate as-is.
 - 2026-10-19: Added `deploy/docker-compose.yml` (image-only deployment); root compose now passes `UPDATE_REPO` to the app.

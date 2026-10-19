@@ -110,18 +110,15 @@ what changed since their last sync.
 - Every state-changing `/api` call must carry the `X-FC-Request: 1` header. A cross-site form can't send it, so
   this blocks CSRF.
 
-## 6. Over-the-air updates
+## 6. Updates
 
-**Server.**
+**Server.** Each `v*` tag publishes `ghcr.io/fahed-alhammadi/filecloud:latest`. Run
+`docker compose pull && docker compose up -d` to update.
 - `/status` reports the running version.
-- When `UPDATE_REPO` is set, *Administration → Server updates* checks that GitHub repository's releases for a
-  newer version.
-- Updates are installed by the optional `updater` service (`docker compose --profile autoupdate up -d`). Every
-  `UPDATE_INTERVAL` it pulls `FILECLOUD_IMAGE` and recreates the app container if the image changed.
 - The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every
   start.
 
-**Android app.**
+**Android app (over the air).**
 1. An administrator publishes a signed APK: from *Administration → Android app*, or with
    `mobile/android/publish-apk.sh`.
 2. The app checks `/api/app/android` on launch and daily in the background (WorkManager, with a notification).

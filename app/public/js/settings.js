@@ -149,30 +149,11 @@ export async function renderAdmin(main, ctx) {
         const id = await promptDialog('New group', 'Group name', '', 'Create');
         if (id) await post('/api/admin/groups', { id }).then(rerender, showError);
       } }, icon('plus'), 'New group')),
-    await updatesCard(),
     await androidCard(rerender),
   ));
 }
 
-// ---------------------------------------------------------------- updates
-
-async function updatesCard() {
-  const box = h('div', {});
-  const draw = (u) => box.replaceChildren(
-    h('p', {}, 'Running version ', h('strong', {}, u.version), '.'),
-    !u.configured
-      ? h('p', { class: 'muted' }, 'Set UPDATE_REPO (owner/repo on GitHub) to check for new releases. Automatic updates are handled by the optional "updater" service in docker-compose.yml.')
-      : u.error ? h('p', { class: 'error' }, `Update check failed: ${u.error}`)
-      : u.updateAvailable
-        ? h('div', {}, h('p', {}, h('span', { class: 'pill warn' }, 'update available'), ` Version ${u.latest} is available. `,
-            h('a', { href: u.url, target: '_blank', rel: 'noopener' }, 'Release notes')),
-          h('p', { class: 'muted small' }, 'With the updater service enabled it installs automatically; otherwise run: docker compose pull && docker compose up -d'))
-        : h('p', {}, h('span', { class: 'pill' }, 'up to date'), ` Latest release: ${u.latest || u.version}`),
-    u.configured && h('button', { class: 'btn', onclick: async () => draw(await get('/api/admin/updates?refresh').catch((e) => ({ ...u, error: e.message }))) }, icon('restore'), 'Check now'),
-  );
-  draw(await get('/api/admin/updates').catch((e) => ({ version: '?', configured: true, error: e.message })));
-  return h('div', { class: 'card' }, h('h2', {}, 'Server updates'), box);
-}
+// ---------------------------------------------------------------- Android releases
 
 async function androidCard(rerender) {
   const releases = await get('/api/admin/app/android').catch(() => []);

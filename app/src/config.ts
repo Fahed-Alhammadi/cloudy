@@ -17,8 +17,6 @@ export const config = {
   trustProxy: /^(1|true|yes)$/i.test(env.TRUST_PROXY ?? ''),
   chunkSize: 8 * 1024 * 1024,
   version: (env.APP_VERSION || pkg.version) as string,
-  /** GitHub "owner/repo" whose releases are checked for newer server versions (optional). */
-  updateRepo: env.UPDATE_REPO ?? '',
   publicDir: fileURLToPath(new URL('../public/', import.meta.url)),
   schemaFile: fileURLToPath(new URL('./schema.sql', import.meta.url)),
 };

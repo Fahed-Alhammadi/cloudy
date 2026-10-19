@@ -1,8 +1,11 @@
-# FileCloud
+<p align="center">
+  <img src="docs/logo.svg" alt="FileCloud logo" width="128" height="128">
+</p>
+
+<h1 align="center">FileCloud</h1>
 
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
-database inside), a
-browser app, and a native Android app that updates over the air.
+database inside), a browser app, and a native Android app that updates over the air.
 
 ## Features
 
@@ -20,19 +23,19 @@ browser app, and a native Android app that updates over the air.
   - back up photos automatically;
   - calendar and contacts;
   - **over-the-air updates** delivered by your own server.
-- **Administration:** users, groups, quotas, app passwords, server update checks, and publishing Android
-  releases.
-- **Self-updating server:** an optional updater service pulls new images and restarts the app.
+- **Administration:** users, groups, quotas, app passwords, and publishing Android releases.
 
 ## Quick start
 
+You only need two files on your server, in one folder: [`docker-compose.yml`](docker-compose.yml) and your
+`.env`.
+
 ```sh
 cp .env.example .env          # set ADMIN_PASSWORD (everything else is optional)
-docker compose up -d --build
+docker compose up -d          # pulls ghcr.io/fahed-alhammadi/filecloud:latest
 ```
 
-Or run the published image without the source code. Use [`deploy/docker-compose.yml`](deploy/docker-compose.yml),
-or just:
+Or without compose:
 
 ```sh
 docker run -d --name filecloud --restart unless-stopped --env-file .env -p 8080:8080 \
@@ -44,7 +47,15 @@ The image contains FileCloud and its own PostgreSQL 17. The database is reachabl
 (no network port, no password to manage). Point `DATABASE_URL` at an external PostgreSQL if you prefer.
 
 Open http://localhost:8080 and sign in as `ADMIN_USER` / `ADMIN_PASSWORD`. If `ADMIN_PASSWORD` is empty, a
-random one is printed in `docker compose logs app`.
+random one is printed in `docker compose logs filecloud`.
+
+**Build from source instead** (development or your own changes), from the repository root:
+
+```sh
+docker compose -f deploy/docker-compose.yml --env-file .env up -d --build
+```
+
+Both compose files use the same project name and volumes, so switching between them keeps your data.
 
 ## Production
 
@@ -100,17 +111,12 @@ Moving an existing install: stop the stack, copy the contents of the old storage
 
 ## Updates
 
-**Server.** To deploy on a server without the source code, copy [`deploy/docker-compose.yml`](deploy/docker-compose.yml)
-and your `.env` into one folder and run `docker compose up -d`. It uses `ghcr.io/fahed-alhammadi/filecloud:latest`.
-From a full checkout instead:
-1. Run a published image: set `FILECLOUD_IMAGE=ghcr.io/fahed-alhammadi/filecloud:latest` in `.env`, then run
-   `docker compose pull && docker compose up -d`.
-2. Optional, see new versions in the admin page: set `UPDATE_REPO=Fahed-Alhammadi/filecloud`.
-3. Install updates automatically:
+**Server.** The root `docker-compose.yml` runs `ghcr.io/fahed-alhammadi/filecloud:latest`. To update to the
+newest release:
 
-   ```sh
-   docker compose --profile autoupdate up -d     # checks every UPDATE_INTERVAL seconds (default 6 h)
-   ```
+```sh
+docker compose pull && docker compose up -d
+```
 
 The database schema migrates itself at startup. Your data stays in the volumes. The release workflow in
 `.github/workflows/release.yml` publishes the image to GitHub Container Registry when you push a `v*` tag.
@@ -149,9 +155,6 @@ Create an app password under *Settings → Connect apps and devices*, then use:
 | `TRUST_PROXY` | `false` | Honor `X-Forwarded-*` headers (only behind a proxy) |
 | `TRASH_RETENTION_DAYS` | `30` | Days before trashed items are deleted |
 | `MAX_VERSIONS` | `20` | Versions kept per file |
-| `FILECLOUD_IMAGE` | `filecloud:local` | Image to run (set a registry image to receive updates) |
-| `UPDATE_REPO` | — | GitHub `owner/repo` checked for new server releases |
-| `UPDATE_INTERVAL` | `21600` | Seconds between automatic update checks (updater profile) |
 
 ## Development
 
@@ -169,7 +172,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how FileCloud works inside.
 app/                 server (Node.js/TypeScript) and the HTML5 web app (app/public)
 mobile/android/      native Android app (Kotlin, Jetpack Compose)
 docs/                architecture notes
-scripts/             auto-update loop used by the updater service
+deploy/              docker-compose.yml that builds the image from source
 tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests
 .github/workflows/   CI and release automation (Docker image + APK)
 ```

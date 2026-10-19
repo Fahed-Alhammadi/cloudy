@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="FileCloud">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B6BCB"/>
+      <stop offset="1" stop-color="#2952B7"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <g fill="#fff">
+    <circle cx="340" cy="570" r="140"/>
+    <circle cx="530" cy="500" r="190"/>
+    <circle cx="700" cy="580" r="130"/>
+    <rect x="340" y="560" width="360" height="150"/>
+  </g>
+</svg>

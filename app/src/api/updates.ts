@@ -43,48 +43,9 @@ async function latestAndroid(): Promise<Release | undefined> {
   return one<Release>(`SELECT * FROM app_releases WHERE platform = 'android' ORDER BY version_code DESC LIMIT 1`);
 }
 
-// ---------------------------------------------------------------- server update check
-
-let cache: { at: number; data: any } | null = null;
-
-/** Compares dotted versions ("1.10.0" > "1.9.2"). */
-export function newer(a: string, b: string): boolean {
-  const pa = a.replace(/^v/, '').split(/[.-]/).map((x) => parseInt(x, 10) || 0);
-  const pb = b.replace(/^v/, '').split(/[.-]/).map((x) => parseInt(x, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
-  }
-  return false;
-}
-
-async function checkServerUpdate(force: boolean) {
-  const base = { version: config.version, repo: config.updateRepo || null };
-  if (!config.updateRepo) return { ...base, configured: false };
-  if (!force && cache && Date.now() - cache.at < 3600_000) return cache.data;
-  let data;
-  try {
-    const res = await fetch(`https://api.github.com/repos/${config.updateRepo}/releases/latest`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'FileCloud' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) throw new Error(`GitHub answered HTTP ${res.status}`);
-    const r = await res.json();
-    const latest = String(r.tag_name ?? '').replace(/^v/, '');
-    data = { ...base, configured: true, latest, updateAvailable: !!latest && newer(latest, config.version), url: r.html_url, notes: String(r.body ?? '').slice(0, 4000), checkedAt: new Date() };
-  } catch (e: any) {
-    data = { ...base, configured: true, error: e.message, checkedAt: new Date() };
-  }
-  cache = { at: Date.now(), data };
-  return data;
-}
-
 // ---------------------------------------------------------------- routes
 
 export function registerUpdates(r: Router, admin: Wrap) {
-  r.get('/api/admin/updates', admin(async ({ res, url }) => {
-    json(res, await checkServerUpdate(url.searchParams.has('refresh')));
-  }));
-
   // Public: lets the Android app (and the login page) discover the newest APK.
   r.get('/api/app/android', async ({ res }) => {
     const rel = await latestAndroid();

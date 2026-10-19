@@ -1,19 +1,18 @@
-# FileCloud — one container: the server and its PostgreSQL database.
-#   cp .env.example .env            # adjust settings
-#   docker compose up -d --build    # build from source and start
-# Over-the-air server updates (needs FILECLOUD_IMAGE to be a registry image):
-#   docker compose --profile autoupdate up -d
-# The app listens on APP_PORT (default 8080). In production put it behind your
-# reverse proxy (TLS termination) and set TRUST_PROXY=true.
+# FileCloud — one container (server + built-in PostgreSQL), run from the published image.
+# Put this file and your .env in one folder, then:
+#   docker compose up -d                              # start
+#   docker compose pull && docker compose up -d       # update to the latest image
+# All settings live in .env (see .env.example). To build from source instead, see deploy/docker-compose.yml.
+# The app listens on APP_PORT (default 8080). In production put it behind your reverse proxy
+# (TLS termination) and set TRUST_PROXY=true.
 name: filecloud
 
 services:
   filecloud:
-    image: ${FILECLOUD_IMAGE:-filecloud:local}
-    build: ./app
+    image: ghcr.io/fahed-alhammadi/filecloud:latest
     container_name: filecloud
     restart: unless-stopped
-    env_file: .env              # every setting comes from .env (see .env.example)
+    env_file: .env              # every setting comes from .env
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
@@ -21,20 +20,6 @@ services:
       - ${DATA_PATH:-app-data}:/data
       # Database — keep on a local disk (not NFS).
       - ${DB_PATH:-db-data}:/var/lib/filecloud/db
-
-  # Optional (profile "autoupdate"): pulls a newer FILECLOUD_IMAGE every UPDATE_INTERVAL
-  # seconds and restarts FileCloud with it.
-  updater:
-    image: docker:27-cli
-    profiles: [autoupdate]
-    restart: unless-stopped
-    environment:
-      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-21600}
-      FILECLOUD_IMAGE: ${FILECLOUD_IMAGE:-filecloud:local}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/project:ro
-    entrypoint: ["/bin/sh", "/project/scripts/auto-update.sh"]
 
 volumes:
   app-data:

@@ -303,8 +303,6 @@ check('token needs valid password', s == 401)
 print('== over-the-air updates')
 s, st = Client().req('GET', '/status')
 check('status reports version', s == 200 and st.get('version'), st)
-s, upd = admin.req('GET', '/api/admin/updates')
-check('admin update info', s == 200 and upd['version'] == st['version'], upd)
 fake_apk = b'PK\x03\x04' + os.urandom(4096)
 import hashlib
 s, rel = admin.req('POST', '/api/admin/app/android?versionCode=900001&versionName=9.0.1&notes=test', fake_apk, headers={'Content-Type': 'application/octet-stream'})
