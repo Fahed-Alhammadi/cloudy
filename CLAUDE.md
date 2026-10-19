@@ -56,6 +56,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-19: CI fix — setup-android v3 failed installing legacy `tools`; now v4 with explicit SDK packages.
+  All actions moved to Node 24 majors; runners pinned to ubuntu-24.04.
 - 2026-10-19: Renamed project to FileCloud (package `io.filecloud.app`, new signing key, DB `filecloud`); removed iOS app.
   Over-the-air updates: server version/update check (`UPDATE_REPO`), `updater` compose service, Android APK
   publishing + in-app/daily update check. GitHub CI + release workflows. Server 1.1.0, Android 1.1.0 (code 2).
