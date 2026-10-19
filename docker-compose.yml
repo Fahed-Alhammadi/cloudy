@@ -1,0 +1,62 @@
+# FileCloud — self-hosted files, sharing, calendar and contacts.
+#   cp .env.example .env   # set passwords
+#   docker compose up -d --build                 # build locally, or
+#   docker compose pull && docker compose up -d  # use the published image (FILECLOUD_IMAGE)
+# Over-the-air server updates: docker compose --profile autoupdate up -d
+# The app listens on APP_PORT (default 8080). In production put it behind your
+# reverse proxy (TLS termination) and set TRUST_PROXY=true.
+name: filecloud
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: filecloud
+      POSTGRES_USER: filecloud
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filecloud -d filecloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    image: ${FILECLOUD_IMAGE:-filecloud:local}
+    build: ./app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://filecloud:${DB_PASSWORD}@db:5432/filecloud
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+      MAX_VERSIONS: ${MAX_VERSIONS:-20}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      DATA_DIR: /data
+    ports:
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
+    volumes:
+      - app-data:/data
+
+  # Optional (profile "autoupdate"): pulls a newer FILECLOUD_IMAGE every UPDATE_INTERVAL
+  # seconds and restarts the app with it. Needs FILECLOUD_IMAGE to point at a registry.
+  updater:
+    image: docker:27-cli
+    profiles: [autoupdate]
+    restart: unless-stopped
+    environment:
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-21600}
+      FILECLOUD_IMAGE: ${FILECLOUD_IMAGE:-filecloud:local}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/project:ro
+    entrypoint: ["/bin/sh", "/project/scripts/auto-update.sh"]
+
+volumes:
+  db-data:
+  app-data:

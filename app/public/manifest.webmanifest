@@ -1,0 +1,9 @@
+{
+  "name": "FileCloud",
+  "short_name": "FileCloud",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0b6bcb",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
