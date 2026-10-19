@@ -63,9 +63,9 @@ location / {
 ## Updates
 
 **Server.**
-1. Run a published image: set `FILECLOUD_IMAGE=ghcr.io/<owner>/filecloud:latest` in `.env`, then run
+1. Run a published image: set `FILECLOUD_IMAGE=ghcr.io/fahed-alhammadi/filecloud:latest` in `.env`, then run
    `docker compose pull && docker compose up -d`.
-2. Optional, see new versions in the admin page: set `UPDATE_REPO=<owner>/<repo>`.
+2. Optional, see new versions in the admin page: set `UPDATE_REPO=Fahed-Alhammadi/filecloud`.
 3. Install updates automatically:
 
    ```sh
