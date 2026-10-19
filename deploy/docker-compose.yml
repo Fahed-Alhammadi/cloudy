@@ -11,7 +11,9 @@ services:
     build: ../app
     container_name: filecloud
     restart: unless-stopped
-    env_file: ../.env           # every setting comes from the root .env
+    env_file:                   # every setting comes from the root .env (optional)
+      - path: ../.env
+        required: false
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:

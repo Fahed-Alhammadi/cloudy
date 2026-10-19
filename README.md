@@ -27,8 +27,19 @@ database inside), a browser app, and a native Android app that updates over the 
 
 ## Quick start
 
-You only need two files on your server, in one folder: [`docker-compose.yml`](docker-compose.yml) and your
-`.env`.
+Try it with one command. No account, token or configuration needed:
+
+```sh
+docker run -d --name filecloud -p 8080:8080 \
+  -v filecloud-data:/data -v filecloud-db:/var/lib/filecloud/db \
+  ghcr.io/fahed-alhammadi/filecloud:latest
+docker logs filecloud | grep "admin password"     # the generated password for user "admin"
+```
+
+Then open http://localhost:8080.
+
+For a permanent install, use Docker Compose. Put two files in one folder on your server:
+[`docker-compose.yml`](docker-compose.yml) and your `.env` (the `.env` is optional; without it, defaults apply).
 
 ```sh
 cp .env.example .env          # set ADMIN_PASSWORD (everything else is optional)
