@@ -1,5 +1,5 @@
 // Personal settings and the admin console.
-import { api, get, post, patch, del } from './api.js';
+import { get, post, patch, del } from './api.js';
 import { h, icon, formatSize, fullDate, toast, showError, modal, confirmDialog, promptDialog, copyText } from './ui.js';
 import { passkeysSupported, createPasskey, isPasskeyCancel } from './passkey.js';
 
@@ -51,7 +51,7 @@ export async function renderSettings(main, ctx) {
       urlRow('Files (WebDAV)', `${davBase}/files/${encodeURIComponent(me.id)}/`),
       urlRow('Calendars & contacts', `${davBase}/`),
       urlRow('Username', me.id),
-      h('p', {}, icon('download'), ' ', h('a', { href: '/download/android' }, 'Download the Cloudy Android app'), h('span', { class: 'muted' }, ' (when your administrator has published it)')),
+      h('p', {}, icon('download'), ' ', h('a', { href: '/download/android' }, 'Download the Cloudy Android app'), h('span', { class: 'muted' }, ' (newest release; the app updates itself)')),
       h('h3', {}, 'App passwords'),
       appPasswords.length ? h('ul', { class: 'plain-list' }, appPasswords.map((p) => h('li', {}, icon('key'),
         h('span', { class: 'grow' }, p.name, h('small', { class: 'muted' }, ` · created ${fullDate(p.createdAt)}${p.lastUsedAt ? ` · last used ${fullDate(p.lastUsedAt)}` : ''}`)),
@@ -274,44 +274,5 @@ export async function renderAdmin(main, ctx) {
         const id = await promptDialog('New group', 'Group name', '', 'Create');
         if (id) await post('/api/admin/groups', { id }).then(rerender, showError);
       } }, icon('plus'), 'New group')),
-    await androidCard(rerender),
   ));
-}
-
-// ---------------------------------------------------------------- Android releases
-
-async function androidCard(rerender) {
-  const releases = await get('/api/admin/app/android').catch(() => []);
-  const file = h('input', { type: 'file', accept: '.apk,application/vnd.android.package-archive', required: true });
-  const code = h('input', { type: 'number', min: 1, required: true, value: (releases[0]?.versionCode ?? 0) + 1 });
-  const name = h('input', { type: 'text', required: true, placeholder: '1.2.0' });
-  const notes = h('textarea', { rows: 2, placeholder: "What's new (shown in the app)" });
-  const status = h('span', { class: 'muted' });
-  return h('div', { class: 'card' },
-    h('h2', {}, 'Android app (over-the-air updates)'),
-    h('p', { class: 'muted' }, 'The newest APK published here is offered to every installed Cloudy Android app, and can be downloaded at ',
-      h('a', { href: '/download/android' }, '/download/android'), '. It must be signed with the same key as the installed app and have a higher version code.'),
-    releases.length ? h('ul', { class: 'plain-list' }, releases.map((r, i) => h('li', {}, icon('download'),
-      h('span', { class: 'grow' }, h('strong', {}, `${r.versionName} (${r.versionCode})`), i === 0 ? h('span', { class: 'pill' }, 'latest') : null,
-        h('div', { class: 'muted small' }, `${formatSize(r.size)} · ${fullDate(r.publishedAt)}${r.notes ? ` · ${r.notes}` : ''}`)),
-      h('button', { class: 'icon-btn', 'aria-label': `Delete release ${r.versionName}`, onclick: async () => {
-        if (await confirmDialog('Delete release', `Remove version ${r.versionName}?`, 'Delete', true)) await del(`/api/admin/app/android/${r.id}`).then(rerender, showError);
-      } }, icon('trash'))))) : h('p', { class: 'muted' }, 'No release published yet.'),
-    h('form', { class: 'form-grid', onsubmit: async (e) => {
-      e.preventDefault();
-      if (!file.files[0]) return;
-      status.textContent = 'Uploading…';
-      const qs = new URLSearchParams({ versionCode: code.value, versionName: name.value.trim(), notes: notes.value.trim() });
-      try {
-        await api('POST', `/api/admin/app/android?${qs}`, file.files[0]);
-        toast('Release published');
-        rerender();
-      } catch (err) { status.textContent = ''; showError(err); }
-    } },
-      h('label', { class: 'field wide' }, h('span', {}, 'APK file'), file),
-      h('label', { class: 'field' }, h('span', {}, 'Version code'), code),
-      h('label', { class: 'field' }, h('span', {}, 'Version name'), name),
-      h('label', { class: 'field wide' }, h('span', {}, 'Release notes'), notes),
-      h('div', { class: 'wide row end' }, status, h('button', { class: 'btn primary', type: 'submit' }, icon('upload'), 'Publish release'))),
-  );
 }

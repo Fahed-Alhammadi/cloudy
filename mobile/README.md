@@ -30,35 +30,30 @@ You need JDK 17+ (e.g. `brew install openjdk@21`) and the Android SDK (platform 
 `sdk.dir` in `android/local.properties` or `ANDROID_HOME`.
 
 ```sh
-android/build-apk.sh        # → dist/Cloudy-<version>.apk (signed) + dist/release.env
+android/build-apk.sh        # → dist/Cloudy-<version>.apk (signed)
 ```
 
 On the first run the script creates a signing key: `android/cloudy-release.keystore` with its passwords in
 `android/keystore.properties`. Both are git-ignored. **Back them up.** Android only installs updates signed
 with the same key.
 
-## Over-the-air updates
+## Updates (from GitHub releases)
 
-1. Bump `versionCode` (must increase) and `versionName` in `android/app/build.gradle.kts`.
-2. Run `android/build-apk.sh`.
-3. Publish to your server, either:
-   - by script, with an administrator's app password:
-
-     ```sh
-     CLOUDY_URL=https://cloud.example.com CLOUDY_TOKEN=<admin app password> \
-       android/publish-apk.sh "What's new in this version"
-     ```
-
-   - or in the web UI: *Administration → Android app → Publish release*.
+1. Bump `versionCode` (must increase) and `versionName` in `android/app/build.gradle.kts`, and `version` in
+   `../app/package.json` to the same version.
+2. Commit and push a tag `vX.Y.Z` (matching `versionName`). The release workflow builds the APK, signs it with the
+   key from the repository secrets, and attaches `Cloudy-X.Y.Z.apk` and `Cloudy.apk` to the GitHub release.
 
 What users see:
-- On launch, and in a daily background check (with a notification), the app sees the newer version and offers
-  **Update**.
-- The app downloads the APK, verifies its SHA-256 hash and opens the Android installer.
+- On launch, and in a daily background check (with a notification), the app asks GitHub for the latest release
+  of `UPDATE_REPO` (set in `build.gradle.kts`; CI uses the building repository) and offers **Update** when its
+  tag is newer than the installed `versionName`.
+- The app downloads the APK (without Cloudy credentials), checks GitHub's SHA-256 and opens the Android
+  installer, which only accepts APKs signed with the same key.
 - The first time, Android asks the user to allow Cloudy to install apps.
 - *More → Check for updates* checks on demand.
-- New users install the first version from `https://<your-server>/download/android`, which is linked on the
-  login page.
+- New users install from `https://<your-server>/download/android` (linked on the login page), which redirects to
+  the latest release's `Cloudy.apk`.
 
 ## Install manually
 

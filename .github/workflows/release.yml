@@ -22,6 +22,9 @@ jobs:
       - id: meta
         run: |
           echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          # Refuse to publish a tag whose commit doesn't carry that version (e.g. tagged before merging).
+          have=$(node -p "require('./app/package.json').version")
+          if [ "$have" != "${GITHUB_REF_NAME#v}" ]; then echo "::error::Tag $GITHUB_REF_NAME but app/package.json is $have"; exit 1; fi
           echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cloudy" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
@@ -67,10 +70,14 @@ jobs:
         if: steps.key.outputs.skip != 'true'
         working-directory: mobile/android
         run: |
-          ./gradlew --no-daemon assembleRelease
+          have=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
+          if [ "$have" != "${GITHUB_REF_NAME#v}" ]; then echo "::error::Tag $GITHUB_REF_NAME but versionName is $have"; exit 1; fi
+          ./gradlew --no-daemon assembleRelease -PupdateRepo="$GITHUB_REPOSITORY"
+          # Versioned name for the release page; stable name for /download/android (releases/latest/download/Cloudy.apk).
           cp app/build/outputs/apk/release/app-release.apk "Cloudy-${GITHUB_REF_NAME#v}.apk"
+          cp app/build/outputs/apk/release/app-release.apk Cloudy.apk
       - uses: softprops/action-gh-release@v3
         if: steps.key.outputs.skip != 'true'
         with:
-          files: mobile/android/Cloudy-*.apk
+          files: mobile/android/Cloudy*.apk
           generate_release_notes: true

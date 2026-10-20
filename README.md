@@ -5,7 +5,7 @@
 <h1 align="center">Cloudy</h1>
 
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
-database inside), a browser app, and a native Android app that updates over the air.
+database inside), a browser app, and a native Android app that updates itself from GitHub releases.
 
 ## Features
 
@@ -22,11 +22,12 @@ database inside), a browser app, and a native Android app that updates over the 
   - keep files available offline;
   - back up photos automatically;
   - calendar and contacts;
-  - **over-the-air updates** delivered by your own server.
+  - edit text files;
+  - **updates itself** from this repository's GitHub releases.
 - **Live updates:** file lists in the browser and the Android app update by themselves when files change
   anywhere (another device, a share, WebDAV), like Google Drive.
-- **Office documents:** Word, Excel, PowerPoint and OpenDocument files open in the built-in Collabora Online
-  editor (view, edit, several people at once) in the browser and the Android app — inside the same container.
+- **Office documents:** Word, Excel, PowerPoint and OpenDocument files can be viewed (read-only) in the browser
+  and the Android app; the built-in LibreOffice turns them into PDF — inside the same container.
 - **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
   (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
 - **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and publishing Android releases.
@@ -98,9 +99,6 @@ Example nginx location:
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:8080;
-    proxy_http_version 1.1;                       # WebSockets (office editor)
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -109,8 +107,6 @@ location / {
     proxy_buffering off;
     proxy_read_timeout 3600s;
 }
-# in the http {} block:
-map $http_upgrade $connection_upgrade { default upgrade; '' close; }
 ```
 
 **Back up** the database (`DB_PATH`) and the user files (`DATA_PATH`) together. For a consistent database dump
@@ -152,17 +148,12 @@ docker compose pull && docker compose up -d
 The database schema migrates itself at startup. Your data stays in the volumes. The release workflow in
 `.github/workflows/release.yml` publishes the image to GitHub Container Registry when you push a `v*` tag.
 
-**Android app.** Publish a new APK and every installed app offers the update:
-
-```sh
-mobile/android/build-apk.sh              # bump versionCode/versionName in app/build.gradle.kts first
-CLOUDY_URL=https://cloud.example.com CLOUDY_TOKEN=<admin app password> \
-  mobile/android/publish-apk.sh "What's new"
-```
-
-You can also upload it in *Administration → Android app*. Users download the first install from
-`https://<your-server>/download/android`, which is also linked on the login page. See
-[mobile/README.md](mobile/README.md) for details.
+**Android app.** The same `v*` tag builds the signed APK and attaches it to the GitHub release. Installed apps
+check the latest GitHub release when opened and once a day, and offer the update — nothing to upload to your
+server. Bump `version` in `app/package.json` and `versionCode`/`versionName` in
+`mobile/android/app/build.gradle.kts` before tagging (the release workflow refuses a tag that doesn't match).
+New users install from `https://<your-server>/download/android` (linked on the login page), which points to the
+latest release. See [mobile/README.md](mobile/README.md).
 
 ## Two-factor authentication
 
@@ -179,18 +170,12 @@ can't ask for a code. An administrator can reset 2FA for a user under *Administr
 
 ## Office documents
 
-The image includes **Collabora Online** (CODE, the editor Nextcloud bundles as "Built-in CODE server").
-Clicking a `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp` (and older `.doc`/`.xls`/`.ppt`) file opens it in
-the editor; *New → Document / Spreadsheet / Presentation* creates one. Saving makes a new file version, so earlier
-versions stay restorable. People with read-only access get a read-only view.
+Opening a `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`, `.rtf` (or older `.doc`/`.xls`/`.ppt`) file shows a
+read-only preview in the browser and in the Android app. The built-in LibreOffice converts the document to PDF the
+first time it's opened (usually a second or two) and keeps the result until the file changes. To change a
+document, download it and upload the new version — Cloudy keeps the old one under *Versions*.
 
-- It starts with the container and is reached through Cloudy's own port — no extra service or port. Your
-  reverse proxy must pass WebSockets (see the nginx example above).
-- Plan about **1 GB of RAM** on top of Cloudy, plus roughly 100–200 MB per open document.
-- Settings: `OFFICE=false` turns it off; `OFFICE_HOME_MODE=true` hides Collabora's welcome/feedback pop-ups
-  (and limits it to 20 connections / 10 documents); `COLLABORA_URL` uses an external Collabora instead.
-- Collabora Online Development Edition is for home and small-team use; see collaboraonline.com for the
-  supported edition.
+Text files (`.txt`, `.md`, `.csv`, …) can be edited directly in the browser and the Android app.
 
 ## Passkeys
 

@@ -170,19 +170,8 @@ CREATE TABLE IF NOT EXISTS dav_changes (
 );
 CREATE INDEX IF NOT EXISTS dav_changes_lookup ON dav_changes (kind, collection_id, token);
 
--- Mobile app releases served for over-the-air updates (APK files live in DATA_DIR/releases).
-CREATE TABLE IF NOT EXISTS app_releases (
-  id bigserial PRIMARY KEY,
-  platform text NOT NULL DEFAULT 'android',
-  version_code integer NOT NULL,
-  version_name text NOT NULL,
-  notes text NOT NULL DEFAULT '',
-  size bigint NOT NULL,
-  sha256 text NOT NULL,
-  file text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (platform, version_code)
-);
+-- Android APKs used to be uploaded to the server; they are on GitHub releases now.
+DROP TABLE IF EXISTS app_releases;
 
 -- Two-factor authentication (TOTP). totp_pending holds a secret during setup until confirmed.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret text;

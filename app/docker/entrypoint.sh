@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cloudy all-in-one entrypoint: runs PostgreSQL, Collabora Online (coolwsd) and the Cloudy server in one container.
+# Cloudy all-in-one entrypoint: runs PostgreSQL and the Cloudy server in one container.
 # Runs as root only long enough to prepare users/permissions, then drops to APP_USER (uid:gid).
 #
 # Environment (all optional, usually set in .env):
@@ -7,8 +7,6 @@
 #   DATABASE_URL  use an external PostgreSQL instead of the embedded one
 #   DB_DIR        embedded database directory (default /var/lib/cloudy/db — keep on a local disk)
 #   DATA_DIR      user files (default /data — may be an NFS mount)
-#   OFFICE        false = don't start the built-in Collabora Online office editor
-#   COLLABORA_URL use an external Collabora instead of the built-in one
 set -eu
 
 APP_USER=${APP_USER:-1000:1000}
@@ -97,54 +95,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
   log "PostgreSQL $PG_MAJOR ready"
 fi
 
-# ---- Collabora Online (office editor). Runs as its own 'cool' user; only Cloudy talks to it (loopback),
-# browsers reach it through Cloudy's port. Restarted if it crashes; Cloudy keeps working without it.
-office_pid=""
-case "${OFFICE:-true}" in 0|false|no|off) OFFICE_ON="" ;; *) OFFICE_ON=1 ;; esac
-if [ -n "$OFFICE_ON" ] && [ -z "${COLLABORA_URL:-}" ] && [ "$(id -u)" = 0 ] && command -v coolwsd >/dev/null; then
-  # Collabora must know whether browsers use https (it builds wss:// URLs). Behind a TLS proxy: yes.
-  case "${PUBLIC_URL:-}" in
-    https://*) TLS_PROXY=true ;;
-    http://*) TLS_PROXY=false ;;
-    *) case "${TRUST_PROXY:-false}" in 1|true|yes) TLS_PROXY=true ;; *) TLS_PROXY=false ;; esac ;;
-  esac
-  case "${OFFICE_HOME_MODE:-false}" in 1|true|yes) HOME_MODE=true ;; *) HOME_MODE=false ;; esac
-  mkdir -p /opt/cool/child-roots /opt/cool/cache
-  chown cool:cool /opt/cool/child-roots /opt/cool/cache
-  (
-    while :; do
-      setpriv --reuid=cool --regid=cool --init-groups /usr/bin/coolwsd --version --use-env-vars \
-        --o:sys_template_path=/opt/cool/systemplate --o:child_root_path=/opt/cool/child-roots \
-        --o:file_server_root_path=/usr/share/coolwsd --o:cache_files.path=/opt/cool/cache \
-        --o:mount_jail_tree=false --o:logging.color=false --o:logging.level="${OFFICE_LOG_LEVEL:-warning}" \
-        --o:net.listen=loopback --o:net.proto=IPv4 --o:ssl.enable=false --o:ssl.termination="$TLS_PROXY" \
-        --o:storage.wopi.alias_groups[@mode]=groups \
-        --o:storage.wopi.alias_groups.group[0].host="http://127.0.0.1:${PORT:-8080}" \
-        --o:storage.wopi.alias_groups.group[0].host[@allow]=true \
-        --o:admin_console.enable=false --o:fetch_update_check=0 --o:num_prespawn_children="${OFFICE_PRESPAWN:-1}" \
-        --o:home_mode.enable="$HOME_MODE" --o:stop_on_config_change=false || true
-      log "office editor stopped; restarting in 10 s"
-      sleep 10
-    done
-  ) &
-  office_pid=$!
-  log "office editor (Collabora Online) starting"
-fi
-
 $RUN node --disable-warning=ExperimentalWarning /app/src/server.ts &
 app_pid=$!
-
-stop_office() {
-  [ -n "$office_pid" ] || return 0
-  kill -TERM "$office_pid" 2>/dev/null || true   # the restart loop
-  pkill -TERM -x coolwsd 2>/dev/null || true
-}
 
 shutdown() {
   log "stopping"
   kill -TERM "$app_pid" 2>/dev/null || true
   wait "$app_pid" 2>/dev/null || true
-  stop_office
   if [ -n "$pg_pid" ]; then
     kill -INT "$pg_pid" 2>/dev/null || true   # PostgreSQL "fast" shutdown
     wait "$pg_pid" 2>/dev/null || true
@@ -160,7 +117,6 @@ while kill -0 "$app_pid" 2>/dev/null && { [ -z "$pg_pid" ] || kill -0 "$pg_pid" 
 done
 log "a process exited unexpectedly"
 kill -TERM "$app_pid" 2>/dev/null || true
-stop_office
 [ -n "$pg_pid" ] && kill -INT "$pg_pid" 2>/dev/null || true
 wait 2>/dev/null || true
 exit 1

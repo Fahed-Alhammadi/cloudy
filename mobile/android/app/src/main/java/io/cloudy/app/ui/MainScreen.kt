@@ -117,9 +117,6 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
             composable("preview/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
                 PreviewScreen(nav, it.arguments!!.getLong("id"))
             }
-            composable("office/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
-                OfficeScreen(nav, it.arguments!!.getLong("id"))
-            }
             composable("list/{kind}") { NodeListScreen(nav, it.arguments!!.getString("kind")!!) }
             composable("search") { SearchScreen(nav) }
             composable("trash") { TrashScreen(nav) }
@@ -176,7 +173,7 @@ fun MoreScreen(nav: NavController) {
                 modifier = Modifier.clickable { scope.launch { UpdateState.check(context, manual = true) } },
                 leadingContent = { Icon(Icons.Outlined.SystemUpdate, null) },
                 headlineContent = { Text("Check for updates") },
-                supportingContent = { Text("Version ${io.cloudy.app.data.AppUpdater.currentVersionName} (${io.cloudy.app.data.AppUpdater.currentVersionCode})") },
+                supportingContent = { Text("Version ${io.cloudy.app.data.AppUpdater.currentVersionName}") },
             )
             Text("Offline storage: ${formatSize(Services.offline.usedBytes())}", Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)

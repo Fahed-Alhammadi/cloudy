@@ -134,13 +134,21 @@ data class Contact(
 
 @Serializable
 data class AppRelease(
-    val versionCode: Int,
     val versionName: String,
     val notes: String = "",
     val size: Long = 0,
-    val sha256: String,
+    /** SHA-256 GitHub reports for the asset, when available. */
+    val sha256: String? = null,
+    /** Absolute download URL of the APK. */
     val url: String,
 )
+
+/** GitHub `GET /repos/{repo}/releases/latest`, only the fields we use. */
+@Serializable
+data class GithubRelease(val tag_name: String, val body: String? = null, val assets: List<GithubAsset> = emptyList())
+
+@Serializable
+data class GithubAsset(val name: String, val size: Long = 0, val browser_download_url: String, val digest: String? = null)
 
 @Serializable
 data class Sharees(val users: List<Sharee> = emptyList(), val groups: List<ShareeGroup> = emptyList())
@@ -155,10 +163,6 @@ data class ShareeGroup(val id: String)
 @Serializable
 data class ChangeEvent(val folders: List<Long> = emptyList(), val shares: Boolean = false)
 
-/** `GET /api/office`: extension -> "edit" | "view" for the built-in office editor. */
+/** `GET /api/office`: extensions the server can show as PDF previews (`/api/nodes/{id}/preview`). */
 @Serializable
-data class OfficeInfo(val enabled: Boolean = false, val extensions: Map<String, String> = emptyMap())
-
-/** `POST /api/nodes/{id}/office`: POST accessToken + accessTokenTtl to `url` (relative to the server). */
-@Serializable
-data class OfficeLaunch(val url: String, val accessToken: String, val accessTokenTtl: Long, val canWrite: Boolean = false, val name: String = "")
+data class OfficeInfo(val enabled: Boolean = false, val extensions: List<String> = emptyList())

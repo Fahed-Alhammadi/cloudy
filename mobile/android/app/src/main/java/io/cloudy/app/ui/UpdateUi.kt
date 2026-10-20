@@ -38,10 +38,10 @@ object UpdateState {
             return
         }
         release = r
-        val skipped = context.getSharedPreferences("updates", Context.MODE_PRIVATE).getInt("skipped", 0)
+        val skipped = context.getSharedPreferences("updates", Context.MODE_PRIVATE).getString("skippedVersion", null)
         when {
             r == null -> if (manual) toast(context, "Cloudy is up to date (${AppUpdater.currentVersionName})")
-            manual || r.versionCode > skipped -> visible = true
+            manual || r.versionName != skipped -> visible = true
         }
     }
 }
@@ -107,7 +107,7 @@ fun UpdatePrompt() {
         confirmButton = { TextButton(enabled = progress == null, onClick = ::start) { Text("Update") } },
         dismissButton = {
             TextButton(enabled = progress == null, onClick = {
-                context.getSharedPreferences("updates", Context.MODE_PRIVATE).edit().putInt("skipped", release.versionCode).apply()
+                context.getSharedPreferences("updates", Context.MODE_PRIVATE).edit().putString("skippedVersion", release.versionName).apply()
                 UpdateState.visible = false
             }) { Text("Later") }
         },

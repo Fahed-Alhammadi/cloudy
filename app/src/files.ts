@@ -48,6 +48,8 @@ export async function ensureDirs(): Promise<void> {
     for (const d of ['blobs', 'tmp', 'uploads']) await mkdir(path.join(config.dataDir, d), { recursive: true });
     await fsWriteFile(probe, 'ok');
     await rm(probe, { force: true });
+    // APKs from the old server-side Android publishing (now on GitHub releases).
+    await rm(path.join(config.dataDir, 'releases'), { recursive: true, force: true });
   } catch (e: any) {
     const uid = process.getuid?.() ?? '?';
     const gid = process.getgid?.() ?? '?';

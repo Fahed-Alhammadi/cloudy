@@ -96,7 +96,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val release = runCatching { AppUpdater.check() }.getOrElse { return Result.retry() } ?: return Result.success()
         val ctx = applicationContext
         val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
-        if (prefs.getInt("notified", 0) >= release.versionCode) return Result.success()
+        if (prefs.getString("notifiedVersion", null) == release.versionName) return Result.success()
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return Result.success()
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -110,7 +110,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             .setContentIntent(open)
             .setAutoCancel(true)
             .build())
-        prefs.edit().putInt("notified", release.versionCode).apply()
+        prefs.edit().putString("notifiedVersion", release.versionName).apply()
         return Result.success()
     }
 }

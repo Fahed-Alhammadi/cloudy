@@ -3,12 +3,12 @@
 ## Overview
 Self-hosted cloud for files, sharing, calendars and contacts: Node.js/TypeScript server + plain-HTML5 web app +
 native Android app with over-the-air updates. Ships as ONE container (Node 24 server + embedded PostgreSQL 17 +
-Collabora Online office editor, started by `app/docker/entrypoint.sh`), configured from `.env`. TLS/reverse proxy is external.
+LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configured from `.env`. TLS/reverse proxy is external.
 
 ## Structure
 - `docker-compose.yml`, `.env.example` — service `cloudy` from `ghcr.io/fahed-alhammadi/cloudy:latest` (`env_file: .env`); update with `docker compose pull && docker compose up -d`; `.env` is git-ignored.
 - `app/Dockerfile`, `app/docker/` — all-in-one Debian 13 image: `entrypoint.sh` (root → user setup, initdb, start postgres on
-  the `/run/cloudy` socket, coolwsd as `cool` on 127.0.0.1:9980 in a restart loop, then node as APP_USER), `pg_hba.conf`.
+  the `/run/cloudy` socket, then node as APP_USER; supervises both), `pg_hba.conf`.
 - `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
@@ -24,20 +24,21 @@ Collabora Online office editor, started by `app/docker/entrypoint.sh`), configur
 - `app/src/webauthn.ts` — passkeys (CBOR/COSE parsing, challenges, signature checks, no deps); routes in `api/passkeys.ts`
   (`/api/passkeys/login*`, `/api/me/passkeys*`), login in `auth.loginWithPasskey()`; browser glue `public/js/passkey.js`.
 - `app/src/events.ts` — live updates: LISTEN on `cloudy_changes` (triggers in schema.sql) → SSE `GET /api/events` `{folders, shares}`.
-- `app/src/office.ts` — Collabora: discovery, `/api/office`, launch tokens, WOPI host (`/wopi/files/*`, loopback only),
-  HTTP+WebSocket proxy for `/browser`, `/cool`, `/hosting/*` (blocks convert-to/admin). Web: `public/js/office.js`.
+- `app/src/office.ts` — read-only office previews: `GET /api/nodes/:id/preview` = LibreOffice → PDF (queued, cached in
+  `DATA_DIR/cache/previews/<id>-<etag>.pdf`), `GET /api/office` lists extensions. Web: `public/js/office.js` + viewer.
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
-  chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`, `updates.ts`
-  (Android release publishing, `/api/app/android`, `/download/android`).
+  chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`. `/download/android` (server.ts)
+  redirects to the latest GitHub release's `Cloudy.apk` (`APP_REPO`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, AppUpdater, Live = SSE + Office), `work/Workers.kt`
-  (photo backup, offline sync, daily update check), `ui/` screens (`OfficeScreen` = Collabora in a WebView). `build-apk.sh` → `mobile/dist/`; `publish-apk.sh` → server.
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, AppUpdater = GitHub releases, Live = SSE + Office preview types),
+  `work/Workers.kt` (photo backup, offline sync, daily update check), `ui/` screens (PreviewScreen edits text files).
+  `build-apk.sh` → `mobile/dist/`.
 
 ## Tech Stack
 Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`; Postgres 17 (Debian);
-Collabora Online CODE (`coolwsd`, Collabora's CODE-deb apt repo, amd64/arm64).
+LibreOffice `*-nogui` packages (headless conversion to PDF).
 Web: vanilla JS modules, `<dialog>`, drag-and-drop, XHR chunk upload. Android: Kotlin 2.1, Compose (BOM 2024.12),
 OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35, minSdk 26.
 
@@ -48,8 +49,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Logs: `docker logs -f cloudy` · Reset all data: `docker compose down -v`
 - Type-check: `cd app && npm install && npm run typecheck`
 - E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>`
-- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 35); publish OTA:
-  `CLOUDY_URL=… CLOUDY_TOKEN=<admin app password> mobile/android/publish-apk.sh "notes"`
+- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 35). Releases (image + APK on GitHub) come
+  from a `vX.Y.Z` tag; CI refuses it unless `app/package.json` and `versionName` are X.Y.Z.
 
 ## Conventions
 - TypeScript must stay *erasable* (no enums/namespaces/parameter properties); imports use `.ts` extensions.
@@ -71,15 +72,20 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Passkeys: RP ID/origin from `PUBLIC_URL` or the request Host; only work over HTTPS/localhost. A passkey login skips TOTP (UV required).
 - Live updates come from DB triggers, so new mutation paths need no extra code; new tables that affect file lists
   need their own trigger. Clients must tolerate duplicate/early events (they just reload).
-- Office: never expose `/wopi` or coolwsd directly; WOPI tokens are re-checked against current access on every call.
-  Image size ~1.7 GB (Collabora ~650 MB); PostgreSQL's LLVM JIT is deleted (`jit=off`).
+- Office files are view-only (PDF previews); only text files are editable (web + Android, `PUT /api/nodes/:id/content`).
+  Image ~1.3 GB (LibreOffice + fonts); PostgreSQL's LLVM JIT is deleted (`jit=off`).
+- Android updates: the app never sends Cloudy credentials to GitHub (`Api.plainHttp`); update prefs are keyed by
+  versionName (`skippedVersion`, `notifiedVersion`).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
-- 2026-10-20: Live updates (DB triggers → LISTEN → SSE `/api/events`; web + Android reload changed views) and built-in
-  Collabora Online office editor (WOPI host + proxy in `office.ts`, web dialog, Android WebView, New document/
-  spreadsheet/presentation). Image moved Alpine → Debian 13 (glibc for Collabora); existing PG17 data dirs start unchanged.
-  New env `OFFICE`, `OFFICE_HOME_MODE`, `COLLABORA_URL`. Server 1.5.1, Android 1.5.1 (code 4). Tags v1.4.0/v1.5.0 point at the passkey-only commit.
+- 2026-10-20: 1.6.0 — Collabora removed; office files viewed read-only as PDF via built-in LibreOffice (`office.ts`).
+  Android updates itself from GitHub releases (admin "Android app" section, `/api/app/android`, `app_releases` table,
+  `publish-apk.sh` removed; `/download/android` redirects to GitHub). Text files editable/creatable on Android.
+  Release workflow checks tag == versions and also uploads `Cloudy.apk`. Server 1.6.0, Android 1.6.0 (code 5).
+- 2026-10-20: 1.5.1 — Live updates (DB triggers → LISTEN → SSE `/api/events`; web + Android reload changed views) and
+  a Collabora editor (replaced in 1.6.0). Image moved Alpine → Debian 13; existing PG17 data dirs start unchanged.
+  Tags v1.4.0/v1.5.0 point at the passkey-only commit.
 - 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
   password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
 - 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,

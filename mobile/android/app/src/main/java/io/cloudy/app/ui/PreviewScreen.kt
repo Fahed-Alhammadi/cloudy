@@ -12,6 +12,10 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import io.cloudy.app.data.Office
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -73,6 +77,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 private fun kindOf(n: FileNode): String = when {
+    Office.canPreview(n) -> "office"
     Regex("^image/(png|jpeg|gif|webp|bmp|heic|avif)$").matches(n.mime) -> "image"
     n.mime.startsWith("video/") || n.mime.startsWith("audio/") -> "media"
     n.mime == "application/pdf" -> "pdf"
@@ -88,7 +93,12 @@ fun PreviewScreen(nav: NavController, id: Long) {
     var node by remember { mutableStateOf<FileNode?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf(false) }
-    LaunchedEffect(id) { runCatching { Services.api.node(id).node }.onSuccess { node = it }.onFailure { error = it.message } }
+    var canEdit by remember { mutableStateOf(false) }
+    LaunchedEffect(id) {
+        runCatching { Services.api.node(id) }
+            .onSuccess { node = it.node; canEdit = it.perm != "read" }
+            .onFailure { error = it.message }
+    }
 
     Scaffold(topBar = {
         TopAppBar(
@@ -108,7 +118,8 @@ fun PreviewScreen(nav: NavController, id: Long) {
                     "image" -> ZoomableImage(n)
                     "media" -> MediaPlayer(n)
                     "pdf" -> PdfView(n)
-                    "text" -> TextView(n)
+                    "office" -> PdfView(n, preview = true)
+                    "text" -> TextView(n, canEdit) { saved -> node = saved }
                     else -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         FileIcon(n, Modifier.padding(16.dp))
                         Text(n.name, style = MaterialTheme.typography.titleMedium)
@@ -160,14 +171,20 @@ private fun MediaPlayer(n: FileNode) {
     AndroidView({ PlayerView(it).apply { this.player = player } }, Modifier.fillMaxSize().background(Color.Black))
 }
 
+/** A PDF, or with [preview] an office document converted to PDF by the server. Cached per file version. */
 @Composable
-private fun PdfView(n: FileNode) {
+private fun PdfView(n: FileNode, preview: Boolean = false) {
     val context = LocalContext.current
     var pages by remember { mutableStateOf<List<Bitmap>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(n.id) {
+    LaunchedEffect(n.id, n.etag) {
         try {
-            val file = Services.offline.localFile(n) ?: File(context.cacheDir, "pdf/${n.id}.pdf").also { if (!it.exists()) Services.api.download(n.id, it) }
+            val file = (if (preview) null else Services.offline.localFile(n)) ?: File(context.cacheDir, "pdf/${n.id}-${n.etag}.pdf").also {
+                if (!it.exists()) {
+                    it.parentFile?.listFiles()?.filter { f -> f.name.startsWith("${n.id}-") }?.forEach { f -> f.delete() }
+                    if (preview) Services.api.downloadUrlTo(Services.api.previewUrl(n.id), it) else Services.api.download(n.id, it)
+                }
+            }
             pages = withContext(Dispatchers.IO) {
                 PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { r ->
                     (0 until minOf(r.pageCount, 200)).map { i ->
@@ -181,7 +198,7 @@ private fun PdfView(n: FileNode) {
                     }
                 }
             }
-        } catch (e: Exception) { error = e.message }
+        } catch (e: Exception) { error = if (preview) "Preview not available: ${e.message}" else e.message }
     }
     when {
         error != null -> EmptyState(Icons.Outlined.CloudOff, error!!)
@@ -192,15 +209,47 @@ private fun PdfView(n: FileNode) {
     }
 }
 
+/** Text file; editable (with Save) when the user may change it. Saving keeps the old content as a version. */
 @Composable
-private fun TextView(n: FileNode) {
-    var text by remember { mutableStateOf<String?>(null) }
+private fun TextView(n: FileNode, canEdit: Boolean, onSaved: (FileNode) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var loaded by remember { mutableStateOf<String?>(null) }
+    var text by remember { mutableStateOf("") }
+    var failed by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     LaunchedEffect(n.id) {
-        text = Services.offline.localFile(n)?.readText() ?: runCatching { Services.api.downloadText(n.id) }.getOrElse { "Error: ${it.message}" }
+        runCatching { Services.offline.localFile(n)?.readText() ?: Services.api.downloadText(n.id) }
+            .onSuccess { loaded = it; text = it }
+            .onFailure { failed = it.message }
     }
-    if (text == null) Loading()
-    else Text(text!!, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(16.dp))
+    val original = loaded
+    when {
+        failed != null -> EmptyState(Icons.Outlined.CloudOff, failed!!)
+        original == null -> Loading()
+        !canEdit -> Text(original, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(16.dp))
+        else -> Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (text != original) "Unsaved changes" else "Saved", Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
+                Button(enabled = text != original && !saving, onClick = {
+                    saving = true
+                    scope.launch {
+                        runCatching { Services.api.saveText(n.id, text) }
+                            .onSuccess { loaded = text; onSaved(it); toast(context, "Saved") }
+                            .onFailure { toast(context, it.message ?: "Save failed") }
+                        saving = false
+                    }
+                }) { Icon(Icons.Outlined.Save, null); Text("  Save") }
+            }
+            OutlinedTextField(
+                value = text, onValueChange = { text = it },
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).padding(bottom = 8.dp),
+            )
+        }
+    }
 }
 
 // ---------------------------------------------------------------- trash

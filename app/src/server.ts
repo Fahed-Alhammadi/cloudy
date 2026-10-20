@@ -17,9 +17,8 @@ import { registerPasskeys } from './api/passkeys.ts';
 import { registerFiles, registerUploadChunks, expireUploads } from './api/files.ts';
 import { registerShares } from './api/shares.ts';
 import { registerGroupware } from './api/groupware.ts';
-import { registerUpdates } from './api/updates.ts';
 import { openStream, startLiveUpdates } from './events.ts';
-import { registerOffice, handleWopi, isCollaboraPath, proxyCollabora, proxyCollaboraUpgrade } from './office.ts';
+import { registerOffice, pruneOfficeCache } from './office.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
 
@@ -41,10 +40,14 @@ registerFiles(router, authed);
 registerUploadChunks(router);
 registerShares(router, authed);
 registerGroupware(router, authed);
-registerUpdates(router, admin);
 registerOffice(router, authed);
 // Live updates (Server-Sent Events): {folders, shares} whenever something the user can see changes.
 router.get('/api/events', authed(async ({ res }, user) => openStream(user.id, res)));
+// The Android APK is published on GitHub releases (stable asset name Cloudy.apk).
+router.get('/download/android', async ({ res }) => {
+  res.writeHead(302, { Location: `https://github.com/${config.appRepo}/releases/latest/download/Cloudy.apk`, 'Cache-Control': 'no-cache' });
+  res.end();
+});
 router.get('/status', async ({ res }) => {
   await q('SELECT 1');
   json(res, { ok: true, version: config.version });
@@ -97,8 +100,6 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL):
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   try {
-    if (isCollaboraPath(url.pathname)) return proxyCollabora(req, res);
-    if (await handleWopi(req, res, url)) return;
     if (await handleDav(req, res, url)) return;
     if (url.pathname.startsWith('/api/')) {
       // CSRF guard: browsers cannot send custom headers cross-site without CORS.
@@ -128,6 +129,7 @@ async function jobs(): Promise<void> {
   try {
     await q(`DELETE FROM sessions WHERE expires_at < now()`);
     await expireUploads();
+    await pruneOfficeCache();
     const n = await expireTrash();
     if (n) console.log(`purged ${n} expired trash item(s)`);
   } catch (e) {
@@ -145,11 +147,6 @@ await migrate();
 await ensureAdmin();
 await startLiveUpdates();
 const server = createServer((req, res) => void handle(req, res));
-server.on('upgrade', (req, socket, head) => {
-  // WebSockets are only used by the office editor.
-  if (isCollaboraPath(new URL(req.url ?? '/', 'http://localhost').pathname)) proxyCollaboraUpgrade(req, socket, head);
-  else socket.destroy();
-});
 server.requestTimeout = 0; // large uploads/downloads
 server.headersTimeout = 60_000;
 server.listen(config.port, () => console.log(`Cloudy ${config.version} listening on :${config.port}`));

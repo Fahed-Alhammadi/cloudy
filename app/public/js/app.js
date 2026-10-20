@@ -134,8 +134,7 @@ function renderLogin(message) {
       error, btn,
       passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, 'or'),
       passkeyBtn,
-      h('a', { class: 'android-link', href: '/download/android', hidden: true }, icon('download'), 'Get the Android app'))));
-  get('/api/app/android').then((r) => { const a = app.querySelector('.android-link'); if (a) { a.hidden = false; a.title = `Version ${r.versionName}`; } }, () => {});
+      h('a', { class: 'android-link', href: '/download/android' }, icon('download'), 'Get the Android app'))));
   user.focus();
   passkeyAutofillAvailable().then((ok) => ok && !passkeyAbort && app.contains(user) && passkeyLogin(true));
 }

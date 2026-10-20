@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds the signed release APK into ../dist/ and writes ../dist/release.env.
+# Builds the signed release APK into ../dist/ (releases are published by CI on a v* tag).
 # First run creates a signing key (cloudy-release.keystore + keystore.properties).
 # BACK BOTH UP: every future update must be signed with the same key.
 set -e
@@ -22,5 +22,4 @@ VERSION_CODE=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts
 mkdir -p ../dist
 APK="../dist/Cloudy-$VERSION_NAME.apk"
 cp app/build/outputs/apk/release/app-release.apk "$APK"
-printf 'VERSION_NAME=%s\nVERSION_CODE=%s\nAPK=%s\n' "$VERSION_NAME" "$VERSION_CODE" "dist/Cloudy-$VERSION_NAME.apk" > ../dist/release.env
 echo "Built $APK (version $VERSION_NAME, code $VERSION_CODE)"

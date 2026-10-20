@@ -5,7 +5,7 @@ import {
   promptDialog, showMenu, copyText,
 } from './ui.js';
 import { openViewer, kindOf } from './viewer.js';
-import { isOfficeFile, openOffice, newDocTypes } from './office.js';
+import { isOfficeFile, officePreviewUrl } from './office.js';
 import { uploadAll, filesFromDrop, filesFromInput } from './upload.js';
 
 const nodeUrl = (node, inline) => `/api/nodes/${node.id}/download${inline ? '?inline' : ''}`;
@@ -138,7 +138,7 @@ function nodeActions(item, opts) {
   const { me } = opts;
   const isOwner = item.owner === me.id;
   return [
-    { label: item.isDir ? 'Open' : isOfficeFile(item) ? 'Open in editor' : 'View', icon: item.isDir ? 'folder' : isOfficeFile(item) ? 'edit' : 'eye', onclick: () => opts.onOpen(item) },
+    { label: item.isDir ? 'Open' : 'View', icon: item.isDir ? 'folder' : 'eye', onclick: () => opts.onOpen(item) },
     { label: item.isDir ? 'Download as ZIP' : 'Download', icon: 'download', onclick: () => triggerDownload(nodeUrl(item, false), item.name) },
     opts.canModify(item) && { label: 'Rename', icon: 'edit', onclick: () => rename(item, opts.reload) },
     opts.canModify(item) && { label: 'Move or copy', icon: 'move', onclick: () => moveCopy([item], opts) },
@@ -316,10 +316,10 @@ export async function shareDialog(item, reload) {
 
 function openItem(item, siblings, opts) {
   if (item.isDir) return void (location.hash = `#/files/${item.id}`);
-  if (isOfficeFile(item)) return void openOffice(item, { onClose: opts.reload });
   const files = siblings.filter((s) => !s.isDir);
   openViewer(files, Math.max(0, files.findIndex((f) => f.id === item.id)), {
     url: nodeUrl,
+    preview: (node) => (isOfficeFile(node) ? officePreviewUrl(node) : null),
     canEdit: opts.canModify(item) || item.owner === opts.me.id || opts.editable || !!item.canEdit,
     onSaved: opts.reload,
   });
@@ -364,16 +364,6 @@ export async function renderFolder(main, id, ctx) {
           openViewer([node], 0, { url: nodeUrl, canEdit: true, onSaved: reload });
         } catch (e) { showError(e); }
       } },
-      ...newDocTypes().map((d) => ({ label: d.label, icon: 'filePlus', onclick: async () => {
-        const name = await promptDialog(d.label, 'File name', d.name, 'Create');
-        if (!name) return;
-        const fileName = name.toLowerCase().endsWith(`.${d.ext}`) ? name : `${name}.${d.ext}`;
-        try {
-          const node = await post(`/api/nodes/${id}/files`, { name: fileName, content: '' });
-          await reload();
-          openOffice(node, { onClose: reload });
-        } catch (e) { showError(e); }
-      } })),
     ]) }, icon('plus'), 'New'),
     canEdit && h('button', { class: 'btn primary', onclick: (e) => showMenu(e.currentTarget, [
       { label: 'Upload files', icon: 'upload', onclick: () => fileInput.click() },

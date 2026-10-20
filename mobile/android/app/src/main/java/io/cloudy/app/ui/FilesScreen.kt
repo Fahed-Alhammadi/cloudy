@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadForOffline
@@ -88,7 +89,6 @@ import io.cloudy.app.data.ApiException
 import io.cloudy.app.data.FileNode
 import io.cloudy.app.data.NodeListing
 import io.cloudy.app.data.Live
-import io.cloudy.app.data.Office
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
@@ -173,6 +173,7 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
     var refreshing by remember { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     var newFolder by remember { mutableStateOf(false) }
+    var newTextFile by remember { mutableStateOf(false) }
     val uploads = remember { UploadState() }
     val snackbar = remember { SnackbarHostState() }
 
@@ -231,6 +232,9 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
                     DropdownMenuItem({ Text("New folder") }, leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) }, onClick = {
                         menuOpen = false; newFolder = true
                     })
+                    DropdownMenuItem({ Text("New text file") }, leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) }, onClick = {
+                        menuOpen = false; newTextFile = true
+                    })
                 }
             }
         },
@@ -274,6 +278,15 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
         newFolder = false
         scope.launch { runCatching { Services.api.mkdir(folderId, name) }.onFailure { toast(context, it.message ?: "Failed") }; load() }
     }
+    if (newTextFile) TextPrompt("New text file", "Notes.txt", confirm = "Create", onDismiss = { newTextFile = false }) { name ->
+        newTextFile = false
+        val fileName = if ('.' in name) name else "$name.txt"
+        scope.launch {
+            runCatching { Services.api.createTextFile(folderId, fileName) }
+                .onSuccess { load(); nav.navigate("preview/${it.id}") }
+                .onFailure { toast(context, it.message ?: "Failed") }
+        }
+    }
 }
 
 // ---------------------------------------------------------------- shared list + actions
@@ -281,7 +294,6 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
 fun openNode(nav: NavController, node: FileNode) {
     when {
         node.isDir -> nav.navigate("files/${node.id}")
-        Office.canOpen(node) -> nav.navigate("office/${node.id}")
         else -> nav.navigate("preview/${node.id}")
     }
 }

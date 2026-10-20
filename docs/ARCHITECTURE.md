@@ -130,15 +130,16 @@ what changed since their last sync.
 - The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every
   start.
 
-**Android app (over the air).**
-1. An administrator publishes a signed APK: from *Administration → Android app*, or with
-   `mobile/android/publish-apk.sh`.
-2. The app checks `/api/app/android` on launch and daily in the background (WorkManager, with a notification).
-3. If a newer `versionCode` exists, the app downloads it, verifies its SHA-256 hash and opens the system
-   installer.
+**Android app (from GitHub releases).**
+1. A `v*` tag builds the signed APK in CI and attaches `Cloudy-<version>.apk` and `Cloudy.apk` to the GitHub
+   release. The workflow fails if the tag doesn't match `app/package.json` or the app's `versionName`.
+2. The app asks `api.github.com/repos/<UPDATE_REPO>/releases/latest` on launch and daily (WorkManager, with a
+   notification) and offers the update when the tag is newer than its `versionName`.
+3. It downloads the APK with an HTTP client that carries no Cloudy credentials, checks the SHA-256 GitHub
+   reports for the asset, and opens the system installer.
 4. Android itself refuses an APK signed with a different key, so only builds from the original signing key can
    update an install.
-5. The newest APK can also be downloaded from `/download/android`, which is linked on the login page.
+5. `/download/android` redirects to `github.com/<APP_REPO>/releases/latest/download/Cloudy.apk` (login page link).
 
 ## 7. Security notes
 
@@ -165,22 +166,15 @@ who can see each changed folder (owner + user/group shares on it or an ancestor)
 jobs, office saves — is covered. Clients reload the view only when it shows a changed folder, and the web app
 waits while a dialog, menu or selection is open. Android collects the stream while the app is in the foreground.
 
-## 10. Office editor (Collabora Online)
+## 10. Office previews (LibreOffice)
 
-The image runs `coolwsd` (Collabora Online CODE, from Collabora's Debian repository) next to PostgreSQL and
-Node, as its own `cool` user, listening on loopback only. This is the model of Nextcloud's
-richdocuments + "Built-in CODE server", compared by inspecting the shipped richdocuments app.
-
-- **WOPI host** (`office.ts`): `GET /wopi/files/:id` (CheckFileInfo), `GET …/contents` (GetFile),
-  `POST …/contents` with `X-WOPI-Override: PUT` (PutFile → `writeFile`, so the old content becomes a version).
-  A save whose `X-COOL-WOPI-Timestamp` doesn't match the file's mtime gets `409 {COOLStatusCode: 1010}`, and
-  Collabora asks the user what to do. WOPI answers loopback callers only.
-- **Tokens**: HMAC-signed (server secret), bound to file, user, write flag and the browser origin
-  (`PostMessageOrigin`), valid 10 h. Each WOPI call re-checks the user's current access.
-- **Proxy**: `/browser/*`, `/cool/*` (including the document WebSocket) and `/hosting/discovery|capabilities`
-  are forwarded to coolwsd with the original `Host`, so Collabora builds public URLs. Its `frame-ancestors`
-  is rewritten to `'self'`; conversion/thumbnail REST endpoints and the admin console are blocked.
-- **Launch**: `POST /api/nodes/:id/office` returns the editor URL (from discovery) and a token; the web app
-  and Android (a WebView host page with the server's origin) POST the token into an iframe.
-- coolwsd isolates documents with chroot via file capabilities or Landlock, both available in Docker's
-  default profile. `ssl.termination` follows `PUBLIC_URL`/`TRUST_PROXY` (browsers on https → `wss://`).
+The image includes LibreOffice without GUI (`libreoffice-*-nogui`). `GET /api/nodes/:id/preview` (read access)
+converts an office file to PDF with `soffice --headless --convert-to pdf` and streams it; browsers show it in their
+PDF viewer, Android renders it with `PdfRenderer`. `GET /api/office` lists the previewable extensions.
+- Results are cached as `DATA_DIR/cache/previews/<id>-<etag>.pdf`: a changed file gets a new etag and is converted
+  again, older PDFs of that file are deleted, and an hourly job removes previews unused for 30 days.
+- One conversion runs at a time (queue), identical requests share it, 120 s timeout, 100 MB size limit. The blob is
+  symlinked with its real extension so LibreOffice picks the right import filter; the LibreOffice profile lives in
+  `/tmp` (not on a possibly-NFS `DATA_DIR`).
+- Previews are read-only. Editing is limited to text files (web viewer and Android), saved through
+  `PUT /api/nodes/:id/content`, which keeps the previous content as a version.

@@ -1,8 +1,7 @@
-# Cloudy all-in-one image: PostgreSQL 17 + Collabora Online (office editor) + Cloudy server in one container.
-# Debian (glibc) because Collabora Online ships glibc packages only (amd64 and arm64).
+# Cloudy all-in-one image: PostgreSQL 17 + LibreOffice (office previews) + Cloudy server in one container.
 FROM node:24-trixie-slim
 ARG APP_VERSION=
-LABEL org.opencontainers.image.title="Cloudy" org.opencontainers.image.description="Self-hosted files, sharing, office documents, calendar and contacts"
+LABEL org.opencontainers.image.title="Cloudy" org.opencontainers.image.description="Self-hosted files, sharing, office previews, calendar and contacts"
 
 # PostgreSQL 17 from Debian; no default cluster (the entrypoint creates its own in DB_DIR).
 # The optional LLVM JIT (~145 MB) is removed; the entrypoint runs PostgreSQL with jit=off.
@@ -13,17 +12,13 @@ RUN mkdir -p /etc/postgresql-common/createcluster.d \
       postgresql-17 tini ca-certificates curl procps \
  && rm -rf /var/lib/apt/lists/* /usr/lib/postgresql/17/lib/llvmjit* /usr/lib/*-linux-gnu/libLLVM*.so* /usr/lib/*-linux-gnu/libz3.so*
 
-# Collabora Online Development Edition (CODE) from Collabora's repository — what Nextcloud's
-# "Built-in CODE server" bundles too. Its post-install creates the 'cool' user and the jail template.
-ARG COLLABORA_REPO=https://www.collaboraoffice.com/repos/CollaboraOnline/CODE-deb
-RUN curl -fsSL -o /usr/share/keyrings/collaboraonline-release-keyring.gpg \
-      https://www.collaboraoffice.com/downloads/gpg/collaboraonline-release-keyring.gpg \
- && printf 'Types: deb\nURIs: %s\nSuites: ./\nSigned-By: /usr/share/keyrings/collaboraonline-release-keyring.gpg\n' "$COLLABORA_REPO" \
-      > /etc/apt/sources.list.d/collaboraonline.sources \
- && apt-get update \
+# LibreOffice without GUI, for read-only office previews (documents are converted to PDF on demand).
+# Carlito/Caladea/Liberation match the metrics of Microsoft's Calibri/Cambria/Arial/Times; Noto covers other scripts.
+RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      coolwsd code-brand collaboraoffice-dict-en \
- && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/25coolwsd
+      libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui libreoffice-draw-nogui \
+      fonts-liberation2 fonts-crosextra-carlito fonts-crosextra-caladea fonts-dejavu-core fonts-noto-core \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 ENV NODE_ENV=production APP_VERSION=$APP_VERSION DATA_DIR=/data DB_DIR=/var/lib/cloudy/db LC_CTYPE=C.UTF-8

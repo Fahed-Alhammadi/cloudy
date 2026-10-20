@@ -32,14 +32,14 @@ object Live {
     }
 }
 
-/** File types the server's office editor opens (loaded after login; empty when it is off). */
+/** Office file types the server shows as read-only PDF previews (loaded after login). */
 object Office {
-    @Volatile var extensions: Map<String, String> = emptyMap()
+    @Volatile var extensions: Set<String> = emptySet()
 
-    fun canOpen(node: FileNode): Boolean =
+    fun canPreview(node: FileNode): Boolean =
         !node.isDir && node.name.substringAfterLast('.', "").lowercase() in extensions
 
     suspend fun load(api: Api) {
-        extensions = runCatching { api.office().extensions }.getOrDefault(extensions)
+        extensions = runCatching { api.office().extensions.toSet() }.getOrDefault(extensions)
     }
 }

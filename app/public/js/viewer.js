@@ -16,7 +16,7 @@ export function kindOf(node) {
 
 /**
  * files: the sibling files (for prev/next), start: index.
- * src = { url(node, inline) -> string, canEdit: bool, onSaved?() }
+ * src = { url(node, inline) -> string, preview?(node) -> PDF preview URL or null, canEdit: bool, onSaved?() }
  */
 export function openViewer(files, start, src) {
   let index = start;
@@ -58,9 +58,29 @@ export function openViewer(files, start, src) {
     else if (kind === 'video') stage.append(h('video', { src: inline, controls: true, autoplay: true, playsinline: true }));
     else if (kind === 'audio') stage.append(h('div', { class: 'audio-card' }, icon('audio'), h('div', {}, node.name), h('audio', { src: inline, controls: true, autoplay: true })));
     else if (kind === 'pdf') stage.append(h('iframe', { src: inline, title: node.name }));
+    else if (src.preview?.(node)) await showPreview(node, src.preview(node));
     else if (kind === 'text' && node.size <= TEXT_LIMIT) await showText(node, inline);
     else stage.append(h('div', { class: 'no-preview' }, icon('file'), h('p', {}, 'No preview available for this file type.'),
       h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), 'Download')));
+  }
+
+  /** Office document: the server converts it to PDF (can take a few seconds the first time). */
+  async function showPreview(node, url) {
+    const shown = node;
+    const note = h('div', { class: 'no-preview' }, icon('file'), h('p', {}, 'Preparing preview…'));
+    stage.append(note);
+    // Wait for the conversion, then let the iframe load the (now cached) PDF; the body isn't read here.
+    const ctl = new AbortController();
+    const res = await fetch(url, { credentials: 'same-origin', signal: ctl.signal });
+    if (res.ok) ctl.abort();
+    if (files[index] !== shown) return;
+    if (!res.ok) {
+      const msg = await res.json().then((j) => j.error, () => null);
+      note.replaceChildren(icon('file'), h('p', {}, msg || 'No preview available for this file.'),
+        h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), 'Download'));
+      return;
+    }
+    stage.replaceChildren(h('iframe', { src: url, title: node.name }));
   }
 
   async function showText(node, inline) {
