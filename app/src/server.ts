@@ -13,6 +13,7 @@ import { ensureAdmin } from './users.ts';
 import { ensureDirs, expireTrash } from './files.ts';
 import { handleDav } from './dav/server.ts';
 import { registerAccount } from './api/account.ts';
+import { registerPasskeys } from './api/passkeys.ts';
 import { registerFiles, registerUploadChunks, expireUploads } from './api/files.ts';
 import { registerShares } from './api/shares.ts';
 import { registerGroupware } from './api/groupware.ts';
@@ -33,6 +34,7 @@ const admin = (h: Authed) => authed(async (ctx, user) => {
 
 const router = new Router();
 registerAccount(router, authed, admin);
+registerPasskeys(router, authed);
 registerFiles(router, authed);
 registerUploadChunks(router);
 registerShares(router, authed);

@@ -58,12 +58,14 @@ export async function deleteUser(id: string): Promise<void> {
 
 export async function userJson(u: User) {
   const groups = await q<{ group_id: string }>(`SELECT group_id FROM group_members WHERE user_id = $1 ORDER BY 1`, [u.id]);
+  const keys = await one<{ n: number }>(`SELECT count(*)::int AS n FROM passkeys WHERE user_id = $1`, [u.id]);
   return {
     id: u.id,
     displayName: u.display_name,
     email: u.email,
     isAdmin: u.is_admin,
     twoFactor: !!u.totp_enabled,
+    passkeys: keys?.n ?? 0,
     disabled: u.disabled,
     quotaBytes: u.quota_bytes,
     used: await usage(u.id),

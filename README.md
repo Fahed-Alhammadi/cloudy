@@ -23,9 +23,9 @@ database inside), a browser app, and a native Android app that updates over the 
   - back up photos automatically;
   - calendar and contacts;
   - **over-the-air updates** delivered by your own server.
-- **Security:** two-factor authentication (authenticator-app codes + recovery codes) for every user, app
-  passwords per device, brute-force protection.
-- **Administration:** users, groups, quotas, app passwords, 2FA reset, and publishing Android releases.
+- **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
+  (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
+- **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and publishing Android releases.
 
 ## Install
 
@@ -167,6 +167,17 @@ once instead, if the phone is lost.
 
 With 2FA on, WebDAV, CalDAV and CardDAV apps must sign in with an **app password**, because those protocols
 can't ask for a code. An administrator can reset 2FA for a user under *Administration → Edit user*.
+
+## Passkeys
+
+Users add a passkey under *Settings → Passkeys* (confirming with their password). After that they can sign in to
+the web app with *Sign in with a passkey*, or by picking the passkey from the username field's autofill. No
+username, password or two-factor code is needed: the passkey itself requires the device's PIN or biometrics.
+
+- Passkeys need HTTPS (or `http://localhost`) and only work on the address they were created on. If your
+  proxy doesn't forward the original `Host`, set `PUBLIC_URL` (e.g. `https://cloud.example.com`).
+- The password still works, and the Android app and DAV clients keep using passwords / app passwords.
+- An administrator can remove all of a user's passkeys under *Administration → Edit user*.
 
 ## Connecting other apps
 

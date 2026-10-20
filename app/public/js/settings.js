@@ -1,10 +1,11 @@
 // Personal settings and the admin console.
 import { api, get, post, patch, del } from './api.js';
 import { h, icon, formatSize, fullDate, toast, showError, modal, confirmDialog, promptDialog, copyText } from './ui.js';
+import { passkeysSupported, createPasskey, isPasskeyCancel } from './passkey.js';
 
 export async function renderSettings(main, ctx) {
   const me = await get('/api/me');
-  const appPasswords = await get('/api/me/app-passwords');
+  const [appPasswords, passkeys] = await Promise.all([get('/api/me/app-passwords'), get('/api/me/passkeys')]);
   const rerender = () => renderSettings(main, ctx).catch(showError);
   const davBase = `${location.origin}/dav`;
 
@@ -42,6 +43,7 @@ export async function renderSettings(main, ctx) {
       h('label', { class: 'field' }, h('span', {}, 'New password (8+ characters)'), pw1),
       h('div', { class: 'wide row end' }, h('button', { class: 'btn primary', type: 'submit' }, 'Change password'))),
 
+    passkeysCard(passkeys, rerender),
     twoFactorCard(me, rerender),
 
     h('div', { class: 'card' }, h('h2', {}, 'Connect apps and devices'),
@@ -68,6 +70,53 @@ export async function renderSettings(main, ctx) {
         } catch (e) { showError(e); }
       } }, icon('plus'), 'Create app password')),
   ));
+}
+
+// ---------------------------------------------------------------- passkeys
+
+function passkeysCard(passkeys, rerender) {
+  const add = async () => {
+    const name = h('input', { type: 'text', maxlength: 60, placeholder: 'e.g. MacBook, iPhone, YubiKey', 'aria-label': 'Passkey name' });
+    const pw = h('input', { type: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
+    let added = false;
+    await modal({
+      title: 'Add a passkey',
+      body: h('div', {},
+        h('p', {}, 'Your device will ask you to confirm with your fingerprint, face, screen lock or security key.'),
+        h('label', { class: 'field' }, h('span', {}, 'Name'), name),
+        h('label', { class: 'field' }, h('span', {}, 'Confirm with your password'), pw)),
+      buttons: [{ label: 'Cancel', value: null }, { label: 'Continue', value: 'ok', primary: true }],
+      onSubmit: async () => {
+        try {
+          const options = await post('/api/me/passkeys/options', { password: pw.value });
+          const cred = await createPasskey(options);
+          await post('/api/me/passkeys', { ...cred, name: name.value.trim() });
+          added = true;
+          return true;
+        } catch (e) {
+          if (e?.name === 'InvalidStateError') toast('This device already has a passkey for your account', 'error');
+          else if (!isPasskeyCancel(e)) showError(e);
+          return false;
+        }
+      },
+    });
+    if (added) { toast('Passkey added'); rerender(); }
+  };
+
+  return h('div', { class: 'card' }, h('h2', {}, 'Passkeys'),
+    h('p', {}, 'Sign in without a password using your fingerprint, face, screen lock or a security key. A passkey replaces both your password and the two-factor code.'),
+    passkeys.length ? h('ul', { class: 'plain-list' }, passkeys.map((p) => h('li', {}, icon('key'),
+      h('span', { class: 'grow' }, p.name, h('small', { class: 'muted' }, ` · added ${fullDate(p.createdAt)}${p.lastUsedAt ? ` · last used ${fullDate(p.lastUsedAt)}` : ''}`)),
+      h('button', { class: 'icon-btn', 'aria-label': `Rename ${p.name}`, onclick: async () => {
+        const name = await promptDialog('Rename passkey', 'Name', p.name, 'Rename');
+        if (name) await patch(`/api/me/passkeys/${p.id}`, { name }).then(rerender, showError);
+      } }, icon('edit')),
+      h('button', { class: 'btn ghost danger', onclick: async () => {
+        if (await confirmDialog('Remove passkey', `You will no longer be able to sign in with "${p.name}". Also delete it from the device or password manager.`, 'Remove', true)) await del(`/api/me/passkeys/${p.id}`).then(rerender, showError);
+      } }, 'Remove')))) : h('p', { class: 'muted' }, 'No passkeys yet.'),
+    passkeysSupported()
+      ? h('button', { class: 'btn', onclick: add }, icon('plus'), 'Add a passkey')
+      : h('p', { class: 'muted small' }, 'This browser cannot create passkeys here. Passkeys need HTTPS (or localhost) and a recent browser.'));
 }
 
 // ---------------------------------------------------------------- two-factor authentication
@@ -155,6 +204,7 @@ async function userDialog(user, groups, rerender) {
     isAdmin: h('input', { type: 'checkbox', checked: !!user?.isAdmin }),
     disabled: h('input', { type: 'checkbox', checked: !!user?.disabled }),
     resetTwoFactor: h('input', { type: 'checkbox' }),
+    removePasskeys: h('input', { type: 'checkbox' }),
     groups: h('select', { multiple: true, size: Math.min(6, Math.max(2, groups.length)) }, groups.map((g) => h('option', { value: g.id, selected: user?.groups.includes(g.id) }, g.id))),
   };
   await modal({
@@ -168,6 +218,7 @@ async function userDialog(user, groups, rerender) {
       h('label', { class: 'field' }, h('span', {}, 'Groups'), groups.length ? f.groups : h('span', { class: 'muted' }, 'No groups yet')),
       h('label', { class: 'check' }, f.isAdmin, 'Administrator'),
       user?.twoFactor && h('label', { class: 'check' }, f.resetTwoFactor, 'Reset two-factor authentication (lost phone)'),
+      user?.passkeys > 0 && h('label', { class: 'check' }, f.removePasskeys, `Remove all passkeys (${user.passkeys})`),
       !isNew && h('label', { class: 'check' }, f.disabled, 'Disabled'),
     ),
     buttons: [{ label: 'Cancel', value: null }, { label: isNew ? 'Create' : 'Save', value: 'save', primary: true }],
@@ -179,7 +230,7 @@ async function userDialog(user, groups, rerender) {
       };
       try {
         if (isNew) await post('/api/admin/users', { ...data, id: f.id.value.trim(), password: f.password.value });
-        else await patch(`/api/admin/users/${encodeURIComponent(user.id)}`, { ...data, disabled: f.disabled.checked, password: f.password.value || undefined, resetTwoFactor: f.resetTwoFactor.checked || undefined });
+        else await patch(`/api/admin/users/${encodeURIComponent(user.id)}`, { ...data, disabled: f.disabled.checked, password: f.password.value || undefined, resetTwoFactor: f.resetTwoFactor.checked || undefined, removePasskeys: f.removePasskeys.checked || undefined });
         rerender();
         return true;
       } catch (e) {
@@ -204,7 +255,7 @@ export async function renderAdmin(main, ctx) {
           h('td', {}, u.email),
           h('td', {}, u.groups.join(', ')),
           h('td', { class: 'nowrap' }, `${formatSize(u.used)}${u.quotaBytes ? ` / ${formatSize(u.quotaBytes)}` : ''}`),
-          h('td', {}, u.isAdmin ? h('span', { class: 'pill' }, 'admin') : '', u.twoFactor ? h('span', { class: 'pill' }, '2FA') : '', u.disabled ? h('span', { class: 'pill warn' }, 'disabled') : ''),
+          h('td', {}, u.isAdmin ? h('span', { class: 'pill' }, 'admin') : '', u.twoFactor ? h('span', { class: 'pill' }, '2FA') : '', u.passkeys ? h('span', { class: 'pill' }, 'passkey') : '', u.disabled ? h('span', { class: 'pill warn' }, 'disabled') : ''),
           h('td', { class: 'nowrap' },
             h('button', { class: 'icon-btn', 'aria-label': `Edit ${u.id}`, onclick: () => userDialog(u, groups, rerender) }, icon('edit')),
             u.id !== ctx.me.id && h('button', { class: 'icon-btn', 'aria-label': `Delete ${u.id}`, onclick: async () => {

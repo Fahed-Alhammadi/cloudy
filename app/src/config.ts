@@ -15,6 +15,8 @@ export const config = {
   sessionDays: Number(env.SESSION_DAYS ?? 14),
   /** Honor X-Forwarded-For / X-Forwarded-Proto. Enable only when a reverse proxy sets them. */
   trustProxy: /^(1|true|yes)$/i.test(env.TRUST_PROXY ?? ''),
+  /** Address users open Cloudy at (e.g. https://cloud.example.com); passkeys are bound to it. Empty = from the request. */
+  publicUrl: (env.PUBLIC_URL ?? '').trim().replace(/\/+$/, ''),
   chunkSize: 8 * 1024 * 1024,
   version: (env.APP_VERSION || pkg.version) as string,
   publicDir: fileURLToPath(new URL('../public/', import.meta.url)),

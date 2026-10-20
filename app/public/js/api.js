@@ -22,7 +22,7 @@ export async function api(method, path, body) {
   const isJson = (res.headers.get('content-type') || '').includes('json');
   const data = res.status === 204 ? null : isJson ? await res.json() : await res.text();
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/api/public') && path !== '/api/login') {
+    if (res.status === 401 && !path.startsWith('/api/public') && !path.startsWith('/api/passkeys/') && path !== '/api/login') {
       window.dispatchEvent(new CustomEvent('cloudy:unauthorized'));
     }
     throw new ApiError(res.status, (data && data.error) || res.statusText, data);

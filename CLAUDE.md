@@ -21,6 +21,8 @@ started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/rev
 - `app/src/download.ts` — Range downloads (inline-safe types only) and streaming store-only ZIP.
 - `app/src/auth.ts` / `users.ts` — scrypt passwords, cookie sessions, bearer device tokens, Basic auth + app passwords, rate limit, user lifecycle.
 - `app/src/totp.ts` — TOTP (RFC 6238) + recovery codes; 2FA routes in `api/account.ts` (`/api/me/2fa/*`), enforced in `auth.login()`.
+- `app/src/webauthn.ts` — passkeys (CBOR/COSE parsing, challenges, signature checks, no deps); routes in `api/passkeys.ts`
+  (`/api/passkeys/login*`, `/api/me/passkeys*`), login in `auth.loginWithPasskey()`; browser glue `public/js/passkey.js`.
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
@@ -55,16 +57,19 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
   (local disk). `ensureDirs()` probes writability and exits with a clear FATAL message. All of /data must be one filesystem.
 - PostgreSQL major is pinned in the image (`PG_MAJOR` in entrypoint); a mismatch with `DB_PATH/PG_VERSION` stops startup — plan
   a dump/restore (or ship both versions + pg_upgrade) before bumping it.
-- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`); keep it false when the port is exposed directly.
+- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`) and -Host (`webauthn.ts`); keep it false when the port is exposed directly.
 - Android authenticates with `POST /api/auth/token` → bearer token (an app password); keep `data/Models.kt` in sync with the JSON API.
 - Releases: bump `app/package.json` version (server) and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts`;
   versionCode must always increase (server rejects lower ones). Tag `vX.Y.Z` to run the release workflow.
 - Android signing key `mobile/android/cloudy-release.keystore` + `keystore.properties` are git-ignored and must be backed up;
   CI signs with the same key from repository secrets.
 - Front end: build DOM with `h()` from `ui.js` (never innerHTML with data); each view exports `renderX(main, ctx)`.
+- Passkeys: RP ID/origin from `PUBLIC_URL` or the request Host; only work over HTTPS/localhost. A passkey login skips TOTP (UV required).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
+  password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
 - 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,
   container/volumes/DB `cloudy`, header `X-Cloudy-Request`, cookies `cloudy_*`, keystore `cloudy-release.keystore` (alias `cloudy`,
   same key). Entrypoint migrates pre-rename databases (role/db `filecloud` → `cloudy`) once at startup.

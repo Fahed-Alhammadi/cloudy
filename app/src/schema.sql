@@ -195,3 +195,18 @@ CREATE TABLE IF NOT EXISTS recovery_codes (
   code_hash text NOT NULL,
   PRIMARY KEY (user_id, code_hash)
 );
+
+-- Passkeys (WebAuthn). public_key is SPKI DER; alg is the COSE algorithm (-7 ES256, -8 EdDSA, -257 RS256).
+CREATE TABLE IF NOT EXISTS passkeys (
+  id bigserial PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id text NOT NULL UNIQUE,      -- base64url
+  public_key bytea NOT NULL,
+  alg integer NOT NULL,
+  sign_count bigint NOT NULL DEFAULT 0,
+  transports text[] NOT NULL DEFAULT '{}',
+  name text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_used_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys (user_id);

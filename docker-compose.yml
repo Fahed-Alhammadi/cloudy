@@ -22,6 +22,8 @@ services:
       APP_USER: ${APP_USER:-1000:1000}
       # true when behind a reverse proxy (real client IPs, HTTPS-only cookies).
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      # Address users open Cloudy at (passkeys are bound to it). Empty = taken from each request's Host.
+      PUBLIC_URL: ${PUBLIC_URL:-}
       # Days before trashed items are deleted; versions kept per file; days a browser login lasts.
       TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
       MAX_VERSIONS: ${MAX_VERSIONS:-20}

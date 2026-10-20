@@ -5,6 +5,7 @@ import { renderFolder, renderRecent, renderFavorites, renderSharedIn, renderShar
 import { renderCalendar } from './calendar.js';
 import { renderContacts } from './contacts.js';
 import { renderSettings, renderAdmin } from './settings.js';
+import { passkeysSupported, passkeyAutofillAvailable, getPasskey, isPasskeyCancel } from './passkey.js';
 
 const app = document.getElementById('app');
 const ctx = { me: null, rerender: () => route(), refreshMe };
@@ -15,8 +16,13 @@ async function refreshMe() {
   route();
 }
 
+// Only one WebAuthn request may be pending; the autofill one is aborted before any other login.
+let passkeyAbort = null;
+
 function renderLogin(message) {
-  const user = h('input', { type: 'text', name: 'username', autocomplete: 'username', required: true, autofocus: true, 'aria-label': 'Username' });
+  passkeyAbort?.abort();
+  passkeyAbort = null;
+  const user = h('input', { type: 'text', name: 'username', autocomplete: 'username webauthn', required: true, autofocus: true, 'aria-label': 'Username' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
   // Second step for accounts with two-factor authentication; shown when the server asks for it.
   const code = h('input', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', 'aria-label': 'Authentication code', placeholder: '123 456' });
@@ -24,9 +30,33 @@ function renderLogin(message) {
     h('small', { class: 'muted' }, 'From your authenticator app, or one of your recovery codes.'));
   const error = h('p', { class: 'error', role: 'alert' }, message || '');
   const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Log in');
+  const passkeyLogin = async (conditional) => {
+    passkeyAbort?.abort();
+    const abort = (passkeyAbort = new AbortController());
+    if (!conditional) error.textContent = '';
+    let picked = false;
+    try {
+      const options = await post('/api/passkeys/login/options');
+      const cred = await getPasskey(options, { signal: abort.signal, conditional });
+      picked = true;
+      await post('/api/passkeys/login', cred);
+      passkeyAbort = null;
+      await refreshMe();
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      if (!isPasskeyCancel(err)) error.textContent = err.message;
+      // Offer passkeys in autofill again after a dialog or a failed sign-in (not after the
+      // autofill request itself failed, which would just fail again).
+      if ((picked || !conditional) && passkeyAbort === abort && app.contains(user)) {
+        passkeyAutofillAvailable().then((ok) => ok && passkeyAbort === abort && passkeyLogin(true));
+      }
+    }
+  };
+  const passkeyBtn = passkeysSupported() && h('button', { class: 'btn block', type: 'button', onclick: () => passkeyLogin(false) }, icon('key'), 'Sign in with a passkey');
   app.replaceChildren(h('main', { class: 'login' },
     h('form', { class: 'login-card', onsubmit: async (e) => {
       e.preventDefault();
+      passkeyAbort?.abort();
       btn.disabled = true;
       error.textContent = '';
       try {
@@ -43,6 +73,7 @@ function renderLogin(message) {
           if (!codeField.hidden) code.select();
         }
         btn.disabled = false;
+        passkeyAutofillAvailable().then((ok) => ok && passkeyAbort?.signal.aborted && app.contains(user) && passkeyLogin(true));
       }
     } },
       h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'),
@@ -50,9 +81,12 @@ function renderLogin(message) {
       h('label', { class: 'field' }, h('span', {}, 'Password'), pass),
       codeField,
       error, btn,
+      passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, 'or'),
+      passkeyBtn,
       h('a', { class: 'android-link', href: '/download/android', hidden: true }, icon('download'), 'Get the Android app'))));
   get('/api/app/android').then((r) => { const a = app.querySelector('.android-link'); if (a) { a.hidden = false; a.title = `Version ${r.versionName}`; } }, () => {});
   user.focus();
+  passkeyAutofillAvailable().then((ok) => ok && !passkeyAbort && app.contains(user) && passkeyLogin(true));
 }
 
 const NAV = [
