@@ -184,6 +184,7 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
     if (Array.isArray(b.groups)) await setGroups(params.id, b.groups);
     // Lost phone: an administrator can turn two-factor off so the user can sign in and set it up again.
     if (b.resetTwoFactor === true) await resetTwoFactor(params.id);
+    if (b.removePasskeys === true) await q(`DELETE FROM passkeys WHERE user_id = $1`, [params.id]);
     forgetBasicCache();
     noContent(res);
   }));

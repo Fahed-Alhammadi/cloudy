@@ -150,3 +150,15 @@ data class Sharee(val id: String, val displayName: String = "")
 
 @Serializable
 data class ShareeGroup(val id: String)
+
+/** Live update from `GET /api/events`: folders whose listing changed; `shares` = shared-with-me changed. */
+@Serializable
+data class ChangeEvent(val folders: List<Long> = emptyList(), val shares: Boolean = false)
+
+/** `GET /api/office`: extension -> "edit" | "view" for the built-in office editor. */
+@Serializable
+data class OfficeInfo(val enabled: Boolean = false, val extensions: Map<String, String> = emptyMap())
+
+/** `POST /api/nodes/{id}/office`: POST accessToken + accessTokenTtl to `url` (relative to the server). */
+@Serializable
+data class OfficeLaunch(val url: String, val accessToken: String, val accessTokenTtl: Long, val canWrite: Boolean = false, val name: String = "")

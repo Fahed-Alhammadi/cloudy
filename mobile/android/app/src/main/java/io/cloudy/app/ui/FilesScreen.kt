@@ -87,6 +87,11 @@ import io.cloudy.app.Services
 import io.cloudy.app.data.ApiException
 import io.cloudy.app.data.FileNode
 import io.cloudy.app.data.NodeListing
+import io.cloudy.app.data.Live
+import io.cloudy.app.data.Office
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
@@ -186,6 +191,8 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
         }
     }
     LaunchedEffect(folderId) { load() }
+    // Live updates: reload when this folder changes on any device (short delay batches bursts like uploads).
+    LaunchedEffect(folderId) { Live.events.filter { folderId in it.folders }.collectLatest { delay(400); load() } }
     val reload: () -> Unit = { scope.launch { load() } }
     val canEdit = listing?.perm != "read" && !offlineMode
 
@@ -272,7 +279,11 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
 // ---------------------------------------------------------------- shared list + actions
 
 fun openNode(nav: NavController, node: FileNode) {
-    if (node.isDir) nav.navigate("files/${node.id}") else nav.navigate("preview/${node.id}")
+    when {
+        node.isDir -> nav.navigate("files/${node.id}")
+        Office.canOpen(node) -> nav.navigate("office/${node.id}")
+        else -> nav.navigate("preview/${node.id}")
+    }
 }
 
 @Composable
@@ -505,6 +516,9 @@ fun NodeListScreen(nav: NavController, kind: String) {
         } catch (e: Exception) { error = e.message }
     }
     LaunchedEffect(kind) { load() }
+    LaunchedEffect(kind) {
+        if (kind != "offline") Live.events.filter { it.folders.isNotEmpty() || it.shares }.collectLatest { delay(400); load() }
+    }
     Scaffold(topBar = {
         TopAppBar(title = { Text(title) }, navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }) { pad ->

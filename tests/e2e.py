@@ -1,5 +1,5 @@
 """End-to-end smoke test for Cloudy. Usage: python3 -I e2e.py http://localhost:8088 admin <password>"""
-import base64, http.cookiejar, io, json, os, sys, urllib.request, urllib.error, zipfile, re, uuid
+import base64, http.cookiejar, io, json, os, sys, threading, time, urllib.request, urllib.error, zipfile, re, uuid
 
 BASE, ADMIN, ADMIN_PW = sys.argv[1], sys.argv[2], sys.argv[3]
 passed = failed = 0
@@ -376,7 +376,92 @@ cc.req('POST', '/api/me/2fa/enable', {'code': totp(setup2['secret'])})
 s, _ = cc.req('POST', '/api/me/2fa/disable', {'password': 'carol-pass-123'})
 s, _ = Client().req('POST', '/api/login', {'user': carol, 'password': 'carol-pass-123'})
 check('user can turn 2FA off', s == 200)
+
+print('== passkeys (API only; the WebAuthn ceremony needs a real authenticator)')
+s, o = Client().req('POST', '/api/passkeys/login/options')
+check('passkey login options', s == 200 and o.get('challenge') and o.get('userVerification') == 'required', o)
+s, _ = cc.req('POST', '/api/me/passkeys/options', {'password': 'wrong'})
+check('adding a passkey needs the password', s == 403)
+s, o = cc.req('POST', '/api/me/passkeys/options', {'password': 'carol-pass-123'})
+check('passkey registration options', s == 200 and o['user']['name'] == carol and o['authenticatorSelection']['residentKey'] == 'required'
+      and {p['alg'] for p in o['pubKeyCredParams']} == {-7, -8, -257}, o)
+s, _ = cc.req('POST', '/api/me/passkeys', {'clientDataJSON': 'e30', 'attestationObject': 'oA'})
+check('invalid passkey registration rejected', s == 400)
+s, keys = cc.req('GET', '/api/me/passkeys')
+check('passkey list empty', s == 200 and keys == [])
+s, _ = Client().req('POST', '/api/passkeys/login', {})
+check('passkey login needs a credential', s == 400)
+s, _ = Client().req('POST', '/api/passkeys/login', {'id': 'AAAA', 'clientDataJSON': 'e30', 'authenticatorData': 'AA', 'signature': 'AA'})
+check('unknown passkey rejected', s == 401)
+s, me = cc.req('GET', '/api/me')
+check('me reports passkey count', me.get('passkeys') == 0)
 admin.req('DELETE', f'/api/admin/users/{carol}')
+
+print('== live updates (Server-Sent Events)')
+def listen(client, sink):
+    def run():
+        try:
+            r = client.op.open(urllib.request.Request(BASE + '/api/events', headers={'Accept': 'text/event-stream'}), timeout=30)
+            sink.append('open')
+            for raw in r:
+                line = raw.decode().strip()
+                if line.startswith('data:'): sink.append(json.loads(line[5:]))
+        except Exception:
+            pass
+    threading.Thread(target=run, daemon=True).start()
+
+def wait_for(pred, seconds=5):
+    end = time.time() + seconds
+    while time.time() < end:
+        if pred(): return True
+        time.sleep(0.1)
+    return False
+
+s, live = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'live-' + uuid.uuid4().hex[:6]})
+s, private = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'private-' + uuid.uuid4().hex[:6]})
+admin.req('POST', f"/api/nodes/{live['id']}/shares", {'type': 'user', 'shareWith': bob, 'canEdit': False})
+bob_events, admin_events = [], []
+listen(bobc, bob_events)
+listen(admin, admin_events)
+check('event stream opens', wait_for(lambda: 'open' in bob_events and 'open' in admin_events))
+time.sleep(0.5)
+admin.req('POST', f"/api/nodes/{live['id']}/files", {'name': 'new.txt', 'content': 'hi'})
+admin.req('POST', f"/api/nodes/{private['id']}/files", {'name': 'secret.txt', 'content': 'hi'})
+has = lambda evs, fid: any(isinstance(e, dict) and fid in e['folders'] for e in evs)
+check('owner gets live update', wait_for(lambda: has(admin_events, live['id']) and has(admin_events, private['id'])))
+check('sharee gets live update for shared folder', wait_for(lambda: has(bob_events, live['id'])), bob_events)
+check('sharee gets no update for private folder', not has(bob_events, private['id']), bob_events)
+s, _ = Client().req('GET', '/api/events')
+check('event stream needs login', s == 401)
+
+print('== office editor (built-in Collabora)')
+if os.environ.get('CLOUDY_TEST_NO_OFFICE'):
+    print('  skip (CLOUDY_TEST_NO_OFFICE set)')
+else:
+    office = {}
+    def office_ready():
+        global office
+        office = admin.req('GET', '/api/office')[1]
+        return office.get('enabled')
+    check('office editor available', wait_for(office_ready, 120), office)
+    check('office opens docx/xlsx/pptx', all(office.get('extensions', {}).get(e) == 'edit' for e in ('docx', 'xlsx', 'pptx')), office)
+    s, doc = admin.req('POST', f"/api/nodes/{live['id']}/files", {'name': 'Report.docx', 'content': ''})
+    s, launch = admin.req('POST', f"/api/nodes/{doc['id']}/office")
+    check('office launch', s == 200 and launch['url'].startswith('/browser/') and 'WOPISrc=' in launch['url'] and launch['canWrite'], launch)
+    s, bl = bobc.req('POST', f"/api/nodes/{doc['id']}/office")
+    check('read-only sharee opens read-only', s == 200 and bl['canWrite'] is False, bl)
+    s, _ = Client().req('POST', f"/api/nodes/{doc['id']}/office")
+    check('office launch needs login', s == 401)
+    s, _ = admin.req('POST', f"/api/nodes/{root}/office")
+    check('folders cannot be opened', s == 400)
+    s, _ = admin.req('GET', f"/wopi/files/{doc['id']}?access_token={launch['accessToken']}")
+    check('WOPI not reachable from outside', s == 404)
+    s, _ = Client().req('POST', '/cool/convert-to/pdf', b'x')
+    check('Collabora conversion API not exposed', s == 404)
+    s, _, _ = Client().req('GET', '/hosting/discovery', raw=True)
+    check('Collabora discovery proxied', s == 200)
+admin.req('DELETE', f"/api/nodes/{live['id']}")
+admin.req('DELETE', f"/api/nodes/{private['id']}")
 
 print('== cleanup')
 s, _ = admin.req('DELETE', f'/api/admin/users/{bob}')

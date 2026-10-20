@@ -135,6 +135,17 @@ export function setCookie(
   res.setHeader('Set-Cookie', [...list, parts.join('; ')]);
 }
 
+/**
+ * Origin the browser sees, e.g. https://cloud.example.com. PUBLIC_URL wins; otherwise Host
+ * (or X-Forwarded-Host behind a trusted proxy) with the request's scheme.
+ */
+export function publicOrigin(req: IncomingMessage): string {
+  if (config.publicUrl) return new URL(config.publicUrl).origin;
+  const fwd = config.trustProxy ? String(req.headers['x-forwarded-host'] ?? '').split(',')[0].trim() : '';
+  const host = fwd || req.headers.host || 'localhost';
+  return new URL(`${isHttps(req) ? 'https' : 'http'}://${host}`).origin;
+}
+
 /** Client IP for rate limiting; forwarded headers are spoofable, so only trusted behind a proxy. */
 export function clientIp(req: IncomingMessage): string {
   if (config.trustProxy) {

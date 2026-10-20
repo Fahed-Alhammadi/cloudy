@@ -4,6 +4,7 @@ import { config } from './config.ts';
 import { q, one } from './db.ts';
 import { HttpError, parseCookies, setCookie, clientIp } from './http.ts';
 import { verifyTotp, normalizeRecoveryCode } from './totp.ts';
+import { assertionCredentialId, verifyAssertion } from './webauthn.ts';
 
 export interface User {
   id: string;
@@ -119,6 +120,42 @@ async function checkSecondFactor(
   }
   recordFailure(req);
   throw new HttpError(401, 'Invalid two-factor code', { twoFactor: true });
+}
+
+/** WebAuthn user.id for an account: stable per user, but not the username itself. */
+export const passkeyUserHandle = (userId: string) => sign(`passkey:${userId}`);
+
+/**
+ * Passwordless login with a passkey. The passkey must verify the user (PIN/biometrics), so it
+ * counts as two factors and replaces both the password and the authenticator code.
+ */
+export async function loginWithPasskey(req: IncomingMessage, body: Record<string, unknown>): Promise<User> {
+  checkRate(req);
+  const key = await one<{ id: string; user_id: string; public_key: Buffer; alg: number; sign_count: string }>(
+    `SELECT p.id, p.user_id, p.public_key, p.alg, p.sign_count FROM passkeys p JOIN users u ON u.id = p.user_id
+      WHERE p.credential_id = $1 AND NOT u.disabled`,
+    [assertionCredentialId(body)],
+  );
+  if (!key) {
+    recordFailure(req);
+    throw new HttpError(401, 'This passkey is not registered with Cloudy');
+  }
+  let count: number;
+  try {
+    count = verifyAssertion(req, {
+      publicKey: key.public_key, alg: key.alg, signCount: Number(key.sign_count), userHandle: await passkeyUserHandle(key.user_id),
+    }, body);
+  } catch (e) {
+    recordFailure(req);
+    throw e;
+  }
+  // Conditional update: a replayed or parallel assertion with the same counter loses.
+  const used = await one(
+    `UPDATE passkeys SET sign_count = $2, last_used_at = now() WHERE id = $1 AND ($2 = 0 OR sign_count < $2) RETURNING id`,
+    [key.id, count],
+  );
+  if (!used) throw new HttpError(401, 'Passkey signature was already used');
+  return (await one<User>(`SELECT ${USER_COLS} FROM users WHERE id = $1`, [key.user_id]))!;
 }
 
 export async function createSession(req: IncomingMessage, res: ServerResponse, userId: string): Promise<void> {

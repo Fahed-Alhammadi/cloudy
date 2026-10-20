@@ -99,7 +99,7 @@ what changed since their last sync.
 
 | Client | How it signs in |
 |---|---|
-| Browser | Password → session cookie (HttpOnly, SameSite=Lax, Secure behind HTTPS) |
+| Browser | Password or passkey → session cookie (HttpOnly, SameSite=Lax, Secure behind HTTPS) |
 | Android app | `POST /api/auth/token` → device token, sent as `Authorization: Bearer …` |
 | WebDAV / CalDAV / CardDAV apps | HTTP Basic with the account password or an app password |
 
@@ -109,6 +109,12 @@ what changed since their last sync.
   - At login, a missing code returns `401 {twoFactor: true}`, so clients show the code field.
   - The last used time step is stored, so a code can't be replayed.
   - With 2FA on, HTTP Basic accepts only app passwords, never the account password.
+- **Passkeys** (WebAuthn) are implemented in `webauthn.ts` with `node:crypto` only (minimal CBOR/COSE; ES256, EdDSA,
+  RS256). Attestation is `none`, so the authenticator model is not verified.
+  - Discoverable credentials with user verification required, so sign-in needs no username and skips TOTP.
+  - RP ID = hostname of `PUBLIC_URL`, else of `Host` (`X-Forwarded-Host` with `TRUST_PROXY`); client origin must match.
+  - Challenges are single-use, in memory, 5 minutes. A signature counter that fails to increase is rejected.
+  - Registering one needs the account password; `user.id` is an HMAC of the username, not the username.
 - Device tokens are app passwords. Users see them, and can revoke them, under *Settings → App passwords*.
 - Passwords are hashed with scrypt. Tokens are stored as SHA-256 hashes.
 - Failed sign-ins are rate-limited per client IP. Behind a proxy, `TRUST_PROXY=true` makes the real client IP
@@ -145,5 +151,36 @@ what changed since their last sync.
 
 - Folder ZIP downloads have no ZIP64 support, so they must stay under 4 GB and 65,535 entries.
 - Repeating events are edited as a whole series.
-- No server-side encryption, external storage, thumbnails, full-text search, two-factor login, or calendar
-  sharing yet.
+- No server-side encryption, external storage, thumbnails, full-text search, or calendar
+  sharing yet. Passkeys are web-only (no Android Credential Manager sign-in).
+
+## 9. Live updates
+
+Triggers on `nodes` and `shares` (`schema.sql`) call `pg_notify('cloudy_changes', …)`; Postgres delivers
+notifications only after commit and merges identical ones in a transaction, so trashing a big folder sends
+one per affected folder. `events.ts` keeps one `LISTEN` connection (reconnects), batches for 250 ms, works out
+who can see each changed folder (owner + user/group shares on it or an ancestor) and pushes
+`event: change` / `{folders, shares}` over Server-Sent Events at `GET /api/events` (pings every 25 s,
+`X-Accel-Buffering: no`). Because the triggers sit in the database, every path — JSON API, WebDAV, background
+jobs, office saves — is covered. Clients reload the view only when it shows a changed folder, and the web app
+waits while a dialog, menu or selection is open. Android collects the stream while the app is in the foreground.
+
+## 10. Office editor (Collabora Online)
+
+The image runs `coolwsd` (Collabora Online CODE, from Collabora's Debian repository) next to PostgreSQL and
+Node, as its own `cool` user, listening on loopback only. This is the model of Nextcloud's
+richdocuments + "Built-in CODE server", compared by inspecting the shipped richdocuments app.
+
+- **WOPI host** (`office.ts`): `GET /wopi/files/:id` (CheckFileInfo), `GET …/contents` (GetFile),
+  `POST …/contents` with `X-WOPI-Override: PUT` (PutFile → `writeFile`, so the old content becomes a version).
+  A save whose `X-COOL-WOPI-Timestamp` doesn't match the file's mtime gets `409 {COOLStatusCode: 1010}`, and
+  Collabora asks the user what to do. WOPI answers loopback callers only.
+- **Tokens**: HMAC-signed (server secret), bound to file, user, write flag and the browser origin
+  (`PostMessageOrigin`), valid 10 h. Each WOPI call re-checks the user's current access.
+- **Proxy**: `/browser/*`, `/cool/*` (including the document WebSocket) and `/hosting/discovery|capabilities`
+  are forwarded to coolwsd with the original `Host`, so Collabora builds public URLs. Its `frame-ancestors`
+  is rewritten to `'self'`; conversion/thumbnail REST endpoints and the admin console are blocked.
+- **Launch**: `POST /api/nodes/:id/office` returns the editor URL (from discovery) and a token; the web app
+  and Android (a WebView host page with the server's origin) POST the token into an iframe.
+- coolwsd isolates documents with chroot via file capabilities or Landlock, both available in Docker's
+  default profile. `ssl.termination` follows `PUBLIC_URL`/`TRUST_PROXY` (browsers on https → `wss://`).

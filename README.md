@@ -23,9 +23,13 @@ database inside), a browser app, and a native Android app that updates over the 
   - back up photos automatically;
   - calendar and contacts;
   - **over-the-air updates** delivered by your own server.
-- **Security:** two-factor authentication (authenticator-app codes + recovery codes) for every user, app
-  passwords per device, brute-force protection.
-- **Administration:** users, groups, quotas, app passwords, 2FA reset, and publishing Android releases.
+- **Live updates:** file lists in the browser and the Android app update by themselves when files change
+  anywhere (another device, a share, WebDAV), like Google Drive.
+- **Office documents:** Word, Excel, PowerPoint and OpenDocument files open in the built-in Collabora Online
+  editor (view, edit, several people at once) in the browser and the Android app — inside the same container.
+- **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
+  (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
+- **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and publishing Android releases.
 
 ## Install
 
@@ -94,6 +98,9 @@ Example nginx location:
 ```nginx
 location / {
     proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;                       # WebSockets (office editor)
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -102,13 +109,15 @@ location / {
     proxy_buffering off;
     proxy_read_timeout 3600s;
 }
+# in the http {} block:
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
 ```
 
 **Back up** the database (`DB_PATH`) and the user files (`DATA_PATH`) together. For a consistent database dump
 while Cloudy runs:
 
 ```sh
-docker exec cloudy su-exec node pg_dump -h /run/cloudy -U cloudy cloudy > cloudy.sql
+docker exec -u node cloudy pg_dump -h /run/cloudy -U cloudy cloudy > cloudy.sql
 ```
 
 (Use your `APP_USER` uid instead of `node` if you changed it.)
@@ -167,6 +176,32 @@ once instead, if the phone is lost.
 
 With 2FA on, WebDAV, CalDAV and CardDAV apps must sign in with an **app password**, because those protocols
 can't ask for a code. An administrator can reset 2FA for a user under *Administration → Edit user*.
+
+## Office documents
+
+The image includes **Collabora Online** (CODE, the editor Nextcloud bundles as "Built-in CODE server").
+Clicking a `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp` (and older `.doc`/`.xls`/`.ppt`) file opens it in
+the editor; *New → Document / Spreadsheet / Presentation* creates one. Saving makes a new file version, so earlier
+versions stay restorable. People with read-only access get a read-only view.
+
+- It starts with the container and is reached through Cloudy's own port — no extra service or port. Your
+  reverse proxy must pass WebSockets (see the nginx example above).
+- Plan about **1 GB of RAM** on top of Cloudy, plus roughly 100–200 MB per open document.
+- Settings: `OFFICE=false` turns it off; `OFFICE_HOME_MODE=true` hides Collabora's welcome/feedback pop-ups
+  (and limits it to 20 connections / 10 documents); `COLLABORA_URL` uses an external Collabora instead.
+- Collabora Online Development Edition is for home and small-team use; see collaboraonline.com for the
+  supported edition.
+
+## Passkeys
+
+Users add a passkey under *Settings → Passkeys* (confirming with their password). After that they can sign in to
+the web app with *Sign in with a passkey*, or by picking the passkey from the username field's autofill. No
+username, password or two-factor code is needed: the passkey itself requires the device's PIN or biometrics.
+
+- Passkeys need HTTPS (or `http://localhost`) and only work on the address they were created on. If your
+  proxy doesn't forward the original `Host`, set `PUBLIC_URL` (e.g. `https://cloud.example.com`).
+- The password still works, and the Android app and DAV clients keep using passwords / app passwords.
+- An administrator can remove all of a user's passkeys under *Administration → Edit user*.
 
 ## Connecting other apps
 

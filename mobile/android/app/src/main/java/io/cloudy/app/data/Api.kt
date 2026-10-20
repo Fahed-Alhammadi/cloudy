@@ -1,6 +1,7 @@
 package io.cloudy.app.data
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -153,6 +154,39 @@ class Api(private val session: Session) {
                 }
             }
             if (!tmp.renameTo(dest)) throw IOException("Could not save file")
+        }
+    }
+
+    // ---- office editor (Collabora)
+    suspend fun office(): OfficeInfo = decode(send("GET", "/api/office"))
+    suspend fun officeLaunch(id: Long): OfficeLaunch = decode(send("POST", "/api/nodes/$id/office"))
+
+    // ---- live updates (Server-Sent Events); blocks until the stream ends
+    suspend fun streamEvents(onEvent: (ChangeEvent) -> Unit) = withContext(Dispatchers.IO) {
+        val client = http.newBuilder().readTimeout(70, TimeUnit.SECONDS).build() // server pings every 25 s
+        val call = client.newCall(Request.Builder().url(url("/api/events")).header("Accept", "text/event-stream").build())
+        val cancel = coroutineContext[Job]?.invokeOnCompletion { call.cancel() } // reads block: cancel closes the socket
+        try {
+            call.execute().use { res ->
+                if (!res.isSuccessful) throw ApiException(res.code, "HTTP ${res.code}")
+                val src = res.body!!.source()
+                var event = ""
+                val data = StringBuilder()
+                while (true) {
+                    val line = src.readUtf8Line() ?: break
+                    when {
+                        line.isEmpty() -> {
+                            if (event == "change" && data.isNotEmpty()) runCatching { onEvent(json.decodeFromString<ChangeEvent>(data.toString())) }
+                            event = ""
+                            data.clear()
+                        }
+                        line.startsWith("event:") -> event = line.substring(6).trim()
+                        line.startsWith("data:") -> data.append(line.substring(5).trim())
+                    }
+                }
+            }
+        } finally {
+            cancel?.dispose()
         }
     }
 

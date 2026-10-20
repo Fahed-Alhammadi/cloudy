@@ -1,6 +1,11 @@
 package io.cloudy.app.ui
 
 import android.net.Uri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import io.cloudy.app.data.Live
+import io.cloudy.app.data.Office
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -79,6 +84,12 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
         Tab("contacts", "Contacts", Icons.Outlined.Contacts),
         Tab("more", "More", Icons.Outlined.Menu),
     )
+    // Live updates while the app is visible; office file types once per session.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        Office.load(Services.api)
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) { Live.run(Services.api) }
+    }
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val currentFolder = entry?.arguments?.getLong("id")
@@ -105,6 +116,9 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
             }
             composable("preview/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
                 PreviewScreen(nav, it.arguments!!.getLong("id"))
+            }
+            composable("office/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
+                OfficeScreen(nav, it.arguments!!.getLong("id"))
             }
             composable("list/{kind}") { NodeListScreen(nav, it.arguments!!.getString("kind")!!) }
             composable("search") { SearchScreen(nav) }

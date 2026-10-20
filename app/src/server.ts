@@ -13,10 +13,13 @@ import { ensureAdmin } from './users.ts';
 import { ensureDirs, expireTrash } from './files.ts';
 import { handleDav } from './dav/server.ts';
 import { registerAccount } from './api/account.ts';
+import { registerPasskeys } from './api/passkeys.ts';
 import { registerFiles, registerUploadChunks, expireUploads } from './api/files.ts';
 import { registerShares } from './api/shares.ts';
 import { registerGroupware } from './api/groupware.ts';
 import { registerUpdates } from './api/updates.ts';
+import { openStream, startLiveUpdates } from './events.ts';
+import { registerOffice, handleWopi, isCollaboraPath, proxyCollabora, proxyCollaboraUpgrade } from './office.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
 
@@ -33,11 +36,15 @@ const admin = (h: Authed) => authed(async (ctx, user) => {
 
 const router = new Router();
 registerAccount(router, authed, admin);
+registerPasskeys(router, authed);
 registerFiles(router, authed);
 registerUploadChunks(router);
 registerShares(router, authed);
 registerGroupware(router, authed);
 registerUpdates(router, admin);
+registerOffice(router, authed);
+// Live updates (Server-Sent Events): {folders, shares} whenever something the user can see changes.
+router.get('/api/events', authed(async ({ res }, user) => openStream(user.id, res)));
 router.get('/status', async ({ res }) => {
   await q('SELECT 1');
   json(res, { ok: true, version: config.version });
@@ -90,6 +97,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL):
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
   try {
+    if (isCollaboraPath(url.pathname)) return proxyCollabora(req, res);
+    if (await handleWopi(req, res, url)) return;
     if (await handleDav(req, res, url)) return;
     if (url.pathname.startsWith('/api/')) {
       // CSRF guard: browsers cannot send custom headers cross-site without CORS.
@@ -134,7 +143,13 @@ try {
 }
 await migrate();
 await ensureAdmin();
+await startLiveUpdates();
 const server = createServer((req, res) => void handle(req, res));
+server.on('upgrade', (req, socket, head) => {
+  // WebSockets are only used by the office editor.
+  if (isCollaboraPath(new URL(req.url ?? '/', 'http://localhost').pathname)) proxyCollaboraUpgrade(req, socket, head);
+  else socket.destroy();
+});
 server.requestTimeout = 0; // large uploads/downloads
 server.headersTimeout = 60_000;
 server.listen(config.port, () => console.log(`Cloudy ${config.version} listening on :${config.port}`));

@@ -2,13 +2,13 @@
 
 ## Overview
 Self-hosted cloud for files, sharing, calendars and contacts: Node.js/TypeScript server + plain-HTML5 web app +
-native Android app with over-the-air updates. Ships as ONE container (Node 24 server + embedded PostgreSQL 17,
-started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/reverse proxy is external.
+native Android app with over-the-air updates. Ships as ONE container (Node 24 server + embedded PostgreSQL 17 +
+Collabora Online office editor, started by `app/docker/entrypoint.sh`), configured from `.env`. TLS/reverse proxy is external.
 
 ## Structure
 - `docker-compose.yml`, `.env.example` — service `cloudy` from `ghcr.io/fahed-alhammadi/cloudy:latest` (`env_file: .env`); update with `docker compose pull && docker compose up -d`; `.env` is git-ignored.
-- `app/Dockerfile`, `app/docker/` — all-in-one image: `entrypoint.sh` (root → user setup, initdb, start postgres on the
-  `/run/cloudy` socket, then node as APP_USER; supervises both), `pg_hba.conf` (local trust only).
+- `app/Dockerfile`, `app/docker/` — all-in-one Debian 13 image: `entrypoint.sh` (root → user setup, initdb, start postgres on
+  the `/run/cloudy` socket, coolwsd as `cool` on 127.0.0.1:9980 in a restart loop, then node as APP_USER), `pg_hba.conf`.
 - `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
@@ -21,17 +21,23 @@ started by `app/docker/entrypoint.sh`), configured entirely from `.env`. TLS/rev
 - `app/src/download.ts` — Range downloads (inline-safe types only) and streaming store-only ZIP.
 - `app/src/auth.ts` / `users.ts` — scrypt passwords, cookie sessions, bearer device tokens, Basic auth + app passwords, rate limit, user lifecycle.
 - `app/src/totp.ts` — TOTP (RFC 6238) + recovery codes; 2FA routes in `api/account.ts` (`/api/me/2fa/*`), enforced in `auth.login()`.
+- `app/src/webauthn.ts` — passkeys (CBOR/COSE parsing, challenges, signature checks, no deps); routes in `api/passkeys.ts`
+  (`/api/passkeys/login*`, `/api/me/passkeys*`), login in `auth.loginWithPasskey()`; browser glue `public/js/passkey.js`.
+- `app/src/events.ts` — live updates: LISTEN on `cloudy_changes` (triggers in schema.sql) → SSE `GET /api/events` `{folders, shares}`.
+- `app/src/office.ts` — Collabora: discovery, `/api/office`, launch tokens, WOPI host (`/wopi/files/*`, loopback only),
+  HTTP+WebSocket proxy for `/browser`, `/cool`, `/hosting/*` (blocks convert-to/admin). Web: `public/js/office.js`.
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
   chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`, `updates.ts`
   (Android release publishing, `/api/app/android`, `/download/android`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, AppUpdater), `work/Workers.kt`
-  (photo backup, offline sync, daily update check), `ui/` screens. `build-apk.sh` → `mobile/dist/`; `publish-apk.sh` → server.
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, AppUpdater, Live = SSE + Office), `work/Workers.kt`
+  (photo backup, offline sync, daily update check), `ui/` screens (`OfficeScreen` = Collabora in a WebView). `build-apk.sh` → `mobile/dist/`; `publish-apk.sh` → server.
 
 ## Tech Stack
-Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`; Postgres 17.
+Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`; Postgres 17 (Debian);
+Collabora Online CODE (`coolwsd`, Collabora's CODE-deb apt repo, amd64/arm64).
 Web: vanilla JS modules, `<dialog>`, drag-and-drop, XHR chunk upload. Android: Kotlin 2.1, Compose (BOM 2024.12),
 OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35, minSdk 26.
 
@@ -51,20 +57,31 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - API errors: throw `HttpError(status, message)`; JSON API returns `{error}`. Mutating `/api` calls need header `X-Cloudy-Request: 1`.
 - Access rules: read/edit on a node = owner or user/group share on it or an ancestor; changing/removing a node
   needs edit on its parent (`requireParentEdit`). Hidden nodes return 404, not 403.
-- Storage: `APP_USER` (entrypoint drops to it via su-exec), `DATA_PATH` → `/data` (may be NFS), `DB_PATH` → `/var/lib/cloudy/db`
+- Storage: `APP_USER` (entrypoint drops to it via `setpriv`), `DATA_PATH` → `/data` (may be NFS), `DB_PATH` → `/var/lib/cloudy/db`
   (local disk). `ensureDirs()` probes writability and exits with a clear FATAL message. All of /data must be one filesystem.
 - PostgreSQL major is pinned in the image (`PG_MAJOR` in entrypoint); a mismatch with `DB_PATH/PG_VERSION` stops startup — plan
   a dump/restore (or ship both versions + pg_upgrade) before bumping it.
-- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`); keep it false when the port is exposed directly.
+- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`) and -Host (`webauthn.ts`); keep it false when the port is exposed directly.
 - Android authenticates with `POST /api/auth/token` → bearer token (an app password); keep `data/Models.kt` in sync with the JSON API.
 - Releases: bump `app/package.json` version (server) and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts`;
   versionCode must always increase (server rejects lower ones). Tag `vX.Y.Z` to run the release workflow.
 - Android signing key `mobile/android/cloudy-release.keystore` + `keystore.properties` are git-ignored and must be backed up;
   CI signs with the same key from repository secrets.
 - Front end: build DOM with `h()` from `ui.js` (never innerHTML with data); each view exports `renderX(main, ctx)`.
+- Passkeys: RP ID/origin from `PUBLIC_URL` or the request Host; only work over HTTPS/localhost. A passkey login skips TOTP (UV required).
+- Live updates come from DB triggers, so new mutation paths need no extra code; new tables that affect file lists
+  need their own trigger. Clients must tolerate duplicate/early events (they just reload).
+- Office: never expose `/wopi` or coolwsd directly; WOPI tokens are re-checked against current access on every call.
+  Image size ~1.7 GB (Collabora ~650 MB); PostgreSQL's LLVM JIT is deleted (`jit=off`).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: Live updates (DB triggers → LISTEN → SSE `/api/events`; web + Android reload changed views) and built-in
+  Collabora Online office editor (WOPI host + proxy in `office.ts`, web dialog, Android WebView, New document/
+  spreadsheet/presentation). Image moved Alpine → Debian 13 (glibc for Collabora); existing PG17 data dirs start unchanged.
+  New env `OFFICE`, `OFFICE_HOME_MODE`, `COLLABORA_URL`. Server 1.4.0, Android 1.4.0 (code 4).
+- 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
+  password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
 - 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,
   container/volumes/DB `cloudy`, header `X-Cloudy-Request`, cookies `cloudy_*`, keystore `cloudy-release.keystore` (alias `cloudy`,
   same key). Entrypoint migrates pre-rename databases (role/db `filecloud` → `cloudy`) once at startup.

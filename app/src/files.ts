@@ -113,6 +113,8 @@ const MIME: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation', odg: 'application/vnd.oasis.opendocument.graphics',
+  rtf: 'application/rtf',
 };
 
 export function mimeOf(name: string): string {
