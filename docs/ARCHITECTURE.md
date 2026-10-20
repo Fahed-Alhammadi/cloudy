@@ -118,7 +118,8 @@ what changed since their last sync.
 - Device tokens are app passwords. Users see them, and can revoke them, under *Settings → App passwords*.
 - Passwords are hashed with scrypt. Tokens are stored as SHA-256 hashes.
 - Failed sign-ins are rate-limited per client IP. Behind a proxy, `TRUST_PROXY=true` makes the real client IP
-  visible.
+  visible: Cloudy takes the right-most public address in `X-Forwarded-For` (proxies on local addresses are skipped,
+  so Traefik → nginx → Cloudy works; addresses a client forges itself sit further left and are ignored).
 - Every state-changing `/api` call must carry the `X-Cloudy-Request: 1` header. A cross-site form can't send it, so
   this blocks CSRF.
 

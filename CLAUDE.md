@@ -67,7 +67,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
   (local disk). `ensureDirs()` probes writability and exits with a clear FATAL message. All of /data must be one filesystem.
 - PostgreSQL major is pinned in the image (`PG_MAJOR` in entrypoint); a mismatch with `DB_PATH/PG_VERSION` stops startup — plan
   a dump/restore (or ship both versions + pg_upgrade) before bumping it.
-- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto (`http.ts`) and -Host (`webauthn.ts`); keep it false when the port is exposed directly.
+- `TRUST_PROXY` gates all use of X-Forwarded-For/-Proto/-Host (`http.ts`); keep it false when the port is exposed directly.
+  `clientIp()` walks X-Forwarded-For + socket from the right, skipping local (proxy) addresses, so chains of proxies work.
 - Android authenticates with `POST /api/auth/token` → bearer token (an app password); keep `data/Models.kt` in sync with the JSON API.
 - Releases: bump `app/package.json` version (server) and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts`;
   versionCode must always increase (server rejects lower ones). Tag `vX.Y.Z` to run the release workflow.
@@ -87,6 +88,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: 1.9.1 — Real client IP behind several proxies (rightmost public address in X-Forwarded-For; all-local →
+  leftmost), `/api/diagnostics` shows the raw chain, Connection check tells "TRUST_PROXY off" from "IP lost before the proxy".
 - 2026-10-20: 1.9.0 — Android *More → Connection check* (API, HTTPS, forwarded headers, WebDAV/CalDAV PROPFIND,
   .well-known, 8 MB upload, live updates; shareable report, DAV URLs to copy) + `GET /api/diagnostics`.
   Server/Android 1.9.0 (code 8).

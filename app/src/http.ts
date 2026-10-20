@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { BlockList, isIP } from 'node:net';
 import { config } from './config.ts';
 
 export class HttpError extends Error {
@@ -146,14 +147,42 @@ export function publicOrigin(req: IncomingMessage): string {
   return new URL(`${isHttps(req) ? 'https' : 'http'}://${host}`).origin;
 }
 
-/** Client IP for rate limiting; forwarded headers are spoofable, so only trusted behind a proxy. */
+// Private, loopback, link-local, carrier-grade NAT and unique-local addresses: where proxies live.
+const LOCAL = new BlockList();
+for (const [net, bits] of [['10.0.0.0', 8], ['172.16.0.0', 12], ['192.168.0.0', 16], ['127.0.0.0', 8], ['169.254.0.0', 16], ['100.64.0.0', 10]] as const) {
+  LOCAL.addSubnet(net, bits, 'ipv4');
+}
+for (const [net, bits] of [['::1', 128], ['fc00::', 7], ['fe80::', 10]] as const) LOCAL.addSubnet(net, bits, 'ipv6');
+
+/** IPv4-mapped IPv6 ("::ffff:1.2.3.4") as plain IPv4; brackets and ports removed. */
+function normalizeIp(raw: string): string {
+  let ip = raw.trim().replace(/^\[|\](:\d+)?$/g, '');
+  if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(ip)) ip = ip.replace(/:\d+$/, '');
+  return ip.replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
+}
+
+export function isLocalIp(ip: string): boolean {
+  const v = isIP(ip);
+  return v === 4 ? LOCAL.check(ip, 'ipv4') : v === 6 ? LOCAL.check(ip, 'ipv6') : false;
+}
+
+/**
+ * Client IP for rate limiting. Forwarded headers are spoofable, so they're only used with TRUST_PROXY.
+ * The chain is X-Forwarded-For plus the connecting address. Going from the right (the hop nearest to us),
+ * local addresses are proxies (Traefik, nginx, Docker) and are skipped while a public address is further
+ * left; the first public address is the visitor, as recorded by the first proxy. Anything a client puts
+ * in X-Forwarded-For itself lands left of that address, so it can't be used to dodge the rate limit from
+ * the internet. When every address is local (visitors on the home network), the leftmost one is used.
+ */
 export function clientIp(req: IncomingMessage): string {
-  if (config.trustProxy) {
-    // The proxy appends the real client address last.
-    const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean).pop();
-    if (fwd) return fwd;
-  }
-  return req.socket.remoteAddress || 'unknown';
+  const socket = normalizeIp(req.socket.remoteAddress || '');
+  if (!config.trustProxy) return socket || 'unknown';
+  const chain = [
+    ...String(req.headers['x-forwarded-for'] ?? '').split(',').map(normalizeIp).filter((ip) => isIP(ip)),
+    socket,
+  ].filter(Boolean);
+  for (let i = chain.length - 1; i >= 0; i--) if (!isLocalIp(chain[i])) return chain[i];
+  return chain[0] || 'unknown';
 }
 
 /** Validates a single file/folder name. */

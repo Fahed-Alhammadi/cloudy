@@ -53,6 +53,9 @@ router.get('/api/diagnostics', authed(async ({ req, res }, user) => {
     origin,
     clientIp: clientIp(req),
     trustProxy: config.trustProxy,
+    // The raw chain, so the client can show where a visitor's address was lost.
+    forwardedFor: String(req.headers['x-forwarded-for'] ?? ''),
+    remoteAddress: req.socket.remoteAddress ?? '',
     publicUrl: !!config.publicUrl,
     chunkSize: config.chunkSize,
     davFiles: `${origin}/dav/files/${encodeURIComponent(user.id)}/`,

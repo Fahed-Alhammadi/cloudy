@@ -29,6 +29,8 @@ data class Diagnostics(
     val origin: String = "",
     val clientIp: String = "",
     val trustProxy: Boolean = false,
+    val forwardedFor: String = "",
+    val remoteAddress: String = "",
     val publicUrl: Boolean = false,
     val chunkSize: Long = 8L * 1024 * 1024,
     val davFiles: String = "",
@@ -120,8 +122,16 @@ class ConnectionCheck(private val context: Context) {
             val seenHost = runCatching { URI(d.origin).let { "${it.host}${if (it.port > 0) ":${it.port}" else ""}" } }.getOrDefault("").lowercase()
             if (seenHost.isNotEmpty() && seenHost != appHost) problems += "The server sees its address as ${d.origin}, the app uses $base" to
                 "Have the proxy keep the Host header (nginx: proxy_set_header Host \$host) or set PUBLIC_URL=$base in .env. Email links and passkeys use this address."
-            if (!isPrivateHost(URI(base).host ?: "") && isPrivateIp(d.clientIp)) problems += "Every visitor looks like ${d.clientIp} to the server" to
-                "Set TRUST_PROXY=true and have the proxy send X-Forwarded-For (nginx: proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for). Otherwise one person's failed logins lock out everyone."
+            if (!isPrivateHost(URI(base).host ?: "") && isPrivateIp(d.clientIp)) {
+                val chain = "X-Forwarded-For: ${d.forwardedFor.ifBlank { "(none)" }}; connection from ${d.remoteAddress}"
+                problems += if (!d.trustProxy) {
+                    "Every visitor looks like ${d.clientIp}: the running server has TRUST_PROXY off ($chain)" to
+                        "Put TRUST_PROXY=true in the .env next to docker-compose.yml and recreate the container with docker compose up -d (check with: docker exec cloudy printenv TRUST_PROXY). Otherwise one person's failed logins lock out everyone."
+                } else {
+                    "Every visitor looks like ${d.clientIp}: your phone's public address never reached the proxy ($chain)" to
+                        "The address is replaced before the reverse proxy — by the router's port forwarding (source NAT) or Docker's userland proxy. Forward the port without source NAT, or run the proxy with host networking. Check on mobile data: on home Wi-Fi a local address is normal."
+                }
+            }
             if (problems.isEmpty()) CheckItem("", CheckState.OK, "HTTPS, address ${d.origin} and your IP ${d.clientIp} arrive correctly")
             else CheckItem("", CheckState.WARN, problems.joinToString("\n") { it.first }, problems.joinToString("\n\n") { it.second })
         }
