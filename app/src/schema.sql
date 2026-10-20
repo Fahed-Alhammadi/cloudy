@@ -210,36 +210,3 @@ CREATE TABLE IF NOT EXISTS passkeys (
   last_used_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS passkeys_user ON passkeys (user_id);
-
--- Live updates: changes to files and shares are announced on channel 'cloudy_changes' (delivered after
--- commit) and pushed to connected clients by events.ts. Folder size/etag propagation also notifies, so
--- parent listings show new sizes.
-CREATE OR REPLACE FUNCTION cloudy_notify_node() RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  IF TG_OP = 'UPDATE' AND (OLD.parent_id, OLD.name, OLD.deleted_at, OLD.blob, OLD.size, OLD.mtime)
-       IS NOT DISTINCT FROM (NEW.parent_id, NEW.name, NEW.deleted_at, NEW.blob, NEW.size, NEW.mtime) THEN
-    RETURN NULL;
-  END IF;
-  IF TG_OP <> 'INSERT' THEN
-    PERFORM pg_notify('cloudy_changes', json_build_object('t', 'n', 'p', OLD.parent_id, 'o', OLD.owner)::text);
-  END IF;
-  IF TG_OP <> 'DELETE' AND (TG_OP = 'INSERT' OR NEW.parent_id IS DISTINCT FROM OLD.parent_id) THEN
-    PERFORM pg_notify('cloudy_changes', json_build_object('t', 'n', 'p', NEW.parent_id, 'o', NEW.owner)::text);
-  END IF;
-  RETURN NULL;
-END $$;
-DROP TRIGGER IF EXISTS nodes_notify ON nodes;
-CREATE TRIGGER nodes_notify AFTER INSERT OR UPDATE OR DELETE ON nodes FOR EACH ROW EXECUTE FUNCTION cloudy_notify_node();
-
-CREATE OR REPLACE FUNCTION cloudy_notify_share() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE s shares;
-BEGIN
-  s := COALESCE(NEW, OLD);
-  IF s.type <> 'link' THEN
-    PERFORM pg_notify('cloudy_changes', json_build_object('t', 's', 'k', s.type, 'w', s.share_with, 'o', s.owner,
-      'p', (SELECT parent_id FROM nodes WHERE id = s.node_id))::text);
-  END IF;
-  RETURN NULL;
-END $$;
-DROP TRIGGER IF EXISTS shares_notify ON shares;
-CREATE TRIGGER shares_notify AFTER INSERT OR UPDATE OR DELETE ON shares FOR EACH ROW EXECUTE FUNCTION cloudy_notify_share();

@@ -6,7 +6,6 @@ import { renderCalendar } from './calendar.js';
 import { renderContacts } from './contacts.js';
 import { renderSettings, renderAdmin } from './settings.js';
 import { passkeysSupported, passkeyAutofillAvailable, getPasskey, isPasskeyCancel } from './passkey.js';
-import { loadOfficeInfo } from './office.js';
 
 const app = document.getElementById('app');
 const ctx = { me: null, rerender: () => route(), refreshMe };

@@ -3,7 +3,8 @@
 // authenticator made a key is not verified — only that the same key signs later.
 import { createHash, createPublicKey, verify, randomBytes } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { HttpError, publicOrigin } from './http.ts';
+import { config } from './config.ts';
+import { HttpError, isHttps } from './http.ts';
 
 /** COSE algorithms we offer: ES256, EdDSA (Ed25519), RS256 — what browsers and authenticators support. */
 export const ALGORITHMS = [-7, -8, -257];
@@ -17,10 +18,19 @@ const sha256 = (b: Buffer | string) => createHash('sha256').update(b).digest();
 
 // ---------------------------------------------------------------- relying party
 
-/** RP ID = hostname of the public origin, so passkeys work only on the address they were created on. */
+/**
+ * Origin the browser sees. PUBLIC_URL wins; otherwise Host (or X-Forwarded-Host behind a trusted proxy).
+ * The RP ID is its hostname, so passkeys work only on the address they were created on.
+ */
 export function relyingParty(req: IncomingMessage): { id: string; origin: string } {
-  const origin = publicOrigin(req);
-  return { id: new URL(origin).hostname, origin };
+  if (config.publicUrl) {
+    const u = new URL(config.publicUrl);
+    return { id: u.hostname, origin: u.origin };
+  }
+  const fwd = config.trustProxy ? String(req.headers['x-forwarded-host'] ?? '').split(',')[0].trim() : '';
+  const host = fwd || req.headers.host || 'localhost';
+  const u = new URL(`${isHttps(req) ? 'https' : 'http'}://${host}`);
+  return { id: u.hostname, origin: u.origin };
 }
 
 // ---------------------------------------------------------------- one-time challenges (in memory, 5 min)
