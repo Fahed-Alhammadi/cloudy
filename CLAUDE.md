@@ -23,6 +23,9 @@ Collabora Online office editor, started by `app/docker/entrypoint.sh`), configur
 - `app/src/totp.ts` — TOTP (RFC 6238) + recovery codes; 2FA routes in `api/account.ts` (`/api/me/2fa/*`), enforced in `auth.login()`.
 - `app/src/webauthn.ts` — passkeys (CBOR/COSE parsing, challenges, signature checks, no deps); routes in `api/passkeys.ts`
   (`/api/passkeys/login*`, `/api/me/passkeys*`), login in `auth.loginWithPasskey()`; browser glue `public/js/passkey.js`.
+- `app/src/events.ts` — live updates: LISTEN on `cloudy_changes` (triggers in schema.sql) → SSE `GET /api/events` `{folders, shares}`.
+- `app/src/office.ts` — Collabora: discovery, `/api/office`, launch tokens, WOPI host (`/wopi/files/*`, loopback only),
+  HTTP+WebSocket proxy for `/browser`, `/cool`, `/hosting/*` (blocks convert-to/admin). Web: `public/js/office.js`.
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
@@ -66,9 +69,17 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
   CI signs with the same key from repository secrets.
 - Front end: build DOM with `h()` from `ui.js` (never innerHTML with data); each view exports `renderX(main, ctx)`.
 - Passkeys: RP ID/origin from `PUBLIC_URL` or the request Host; only work over HTTPS/localhost. A passkey login skips TOTP (UV required).
+- Live updates come from DB triggers, so new mutation paths need no extra code; new tables that affect file lists
+  need their own trigger. Clients must tolerate duplicate/early events (they just reload).
+- Office: never expose `/wopi` or coolwsd directly; WOPI tokens are re-checked against current access on every call.
+  Image size ~1.7 GB (Collabora ~650 MB); PostgreSQL's LLVM JIT is deleted (`jit=off`).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: Live updates (DB triggers → LISTEN → SSE `/api/events`; web + Android reload changed views) and built-in
+  Collabora Online office editor (WOPI host + proxy in `office.ts`, web dialog, Android WebView, New document/
+  spreadsheet/presentation). Image moved Alpine → Debian 13 (glibc for Collabora); existing PG17 data dirs start unchanged.
+  New env `OFFICE`, `OFFICE_HOME_MODE`, `COLLABORA_URL`. Server 1.5.0, Android 1.5.0 (code 4; v1.4.0 was the passkey release).
 - 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
   password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
 - 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,

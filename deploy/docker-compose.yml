@@ -23,6 +23,10 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       # Address users open Cloudy at (passkeys are bound to it). Empty = taken from each request's Host.
       PUBLIC_URL: ${PUBLIC_URL:-}
+      # Built-in office editor (Collabora Online, ~1 GB RAM): false turns it off. Home mode hides its
+      # welcome/feedback pop-ups but limits it to 20 connections / 10 open documents.
+      OFFICE: ${OFFICE:-true}
+      OFFICE_HOME_MODE: ${OFFICE_HOME_MODE:-false}
       # Days before trashed items are deleted; versions kept per file; days a browser login lasts.
       TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
       MAX_VERSIONS: ${MAX_VERSIONS:-20}
