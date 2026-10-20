@@ -1,9 +1,11 @@
 import ICAL from 'ical.js';
 import { randomUUID } from 'node:crypto';
 import type { Router, Ctx } from '../http.ts';
-import { json, noContent, readJson, HttpError } from '../http.ts';
+import { json, noContent, readJson, readBuffer, HttpError } from '../http.ts';
 import type { User } from '../auth.ts';
 import * as G from '../groupware.ts';
+import { parseContactsFile } from '../contacts-import.ts';
+import { contentDisposition } from '../download.ts';
 import type { Kind, DavObject } from '../groupware.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
@@ -130,6 +132,15 @@ function contactOut(obj: DavObject) {
     birthday: String(v.getFirstPropertyValue('bday') ?? ''),
     note: String(v.getFirstPropertyValue('note') ?? ''),
   };
+}
+
+/** Same person: same name plus a shared email or phone (phone compared by digits). */
+function dupKeys(c: { fn: string; emails: string[]; phones: string[] }): string[] {
+  const name = c.fn.trim().toLowerCase();
+  return [
+    ...c.emails.map((e) => `${name}|e|${e.trim().toLowerCase()}`),
+    ...c.phones.map((p) => p.replace(/\D/g, '')).filter((d) => d.length >= 5).map((d) => `${name}|p|${d.slice(-9)}`),
+  ];
 }
 
 function applyContact(v: Comp, b: any) {
@@ -278,5 +289,70 @@ export function registerGroupware(r: Router, authed: Wrap) {
     const c = await G.collectionById(G.CARD, user.id, params.id);
     if (!(await G.deleteObject(G.CARD, c, params.uri))) throw new HttpError(404, 'Contact not found');
     noContent(res);
+  }));
+
+  // Import a .vcf (one or many cards, vCard 2.1–4.0) or a CSV export (Google, Outlook, simple sheets).
+  // A card whose UID is already in the address book replaces it; a contact with the same name and a
+  // shared email or phone as an existing one is skipped, so importing the same file twice is harmless.
+  r.post('/api/addressbooks/:id/import', authed(async ({ req, res, params }, user) => {
+    const c = await G.collectionById(G.CARD, user.id, params.id);
+    let parsed;
+    try {
+      parsed = parseContactsFile(await readBuffer(req, 20 * 1024 * 1024));
+    } catch (e: any) {
+      throw e instanceof HttpError ? e : new HttpError(400, e.message);
+    }
+    const existing = await G.listObjects(G.CARD, c.id);
+    const byUid = new Map(existing.filter((o) => o.uid).map((o) => [o.uid, o]));
+    const seen = new Set<string>();
+    const remember = (k: ReturnType<typeof contactOut>) => dupKeys(k).forEach((x) => seen.add(x));
+    for (const o of existing) { try { remember(contactOut(o)); } catch { /* unparsable */ } }
+
+    const result = { format: parsed.format, imported: 0, updated: 0, duplicates: 0, skipped: parsed.skipped, errors: parsed.errors };
+    const cards = [...parsed.vcards];
+    for (const fields of parsed.contacts) {
+      try {
+        const v = G.parseComponent('BEGIN:VCARD\r\nVERSION:3.0\r\nEND:VCARD\r\n');
+        v.addPropertyWithValue('uid', randomUUID());
+        applyContact(v, fields);
+        cards.push(v.toString() + '\r\n');
+      } catch (e: any) {
+        result.skipped++;
+        if (result.errors.length < 10) result.errors.push(e.message);
+      }
+    }
+    for (const data of cards) {
+      try {
+        const uid = String(G.parseComponent(data).getFirstPropertyValue('uid') ?? '');
+        const prev = uid ? byUid.get(uid) : undefined;
+        if (prev) {
+          await G.putObject(G.CARD, c, prev.uri, data);
+          result.updated++;
+          continue;
+        }
+        const out = contactOut({ data, uri: '' } as any);
+        if (dupKeys(out).some((k) => seen.has(k))) { result.duplicates++; continue; }
+        const { obj } = await G.putObject(G.CARD, c, G.newUri(G.CARD), data, { ifNoneMatch: '*' });
+        byUid.set(obj.uid, obj);
+        remember(out);
+        result.imported++;
+      } catch (e: any) {
+        result.skipped++;
+        if (result.errors.length < 10) result.errors.push(e.message);
+      }
+    }
+    json(res, result);
+  }));
+
+  // All contacts of an address book as one .vcf file.
+  r.get('/api/addressbooks/:id/export', authed(async ({ res, params }, user) => {
+    const c = await G.collectionById(G.CARD, user.id, params.id);
+    const body = (await G.listObjects(G.CARD, c.id)).map((o) => o.data.replace(/\s*$/, '\r\n')).join('');
+    res.writeHead(200, {
+      'Content-Type': 'text/vcard; charset=utf-8',
+      'Content-Disposition': contentDisposition('attachment', `${c.name || 'Contacts'}.vcf`),
+      'Cache-Control': 'no-cache',
+    });
+    res.end(body);
   }));
 }

@@ -1,10 +1,39 @@
 // Contacts app over CardDAV-backed address books.
-import { get, post, put, patch, del } from './api.js';
-import { h, icon, toast, showError, confirmDialog, promptDialog, showMenu, copyText } from './ui.js';
+import { api, get, post, put, patch, del } from './api.js';
+import { h, icon, toast, showError, confirmDialog, promptDialog, showMenu, copyText, modal } from './ui.js';
+import { attachDropZone } from './files.js';
 
 let currentBook = null;
 let currentUri = null;
 let filter = '';
+
+/** Uploads a .vcf / .csv file into `book` and shows what happened. */
+async function importContacts(book, file, rerender) {
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) return showError(new Error('That file is too large (20 MB at most).'));
+  try {
+    toast(`Importing ${file.name}…`);
+    const r = await api('POST', `/api/addressbooks/${book.id}/import`, file);
+    const lines = [
+      `${r.imported} new contact(s) added to "${book.name}".`,
+      r.updated && `${r.updated} existing contact(s) updated (same contact ID).`,
+      r.duplicates && `${r.duplicates} skipped because they are already in the address book.`,
+      r.skipped && `${r.skipped} could not be read.`,
+    ].filter(Boolean);
+    await modal({ title: 'Import finished', body: h('div', {},
+      lines.map((l) => h('p', {}, l)),
+      r.errors?.length ? h('details', {}, h('summary', {}, 'Details'), h('ul', {}, r.errors.map((e) => h('li', { class: 'small muted' }, e)))) : null),
+      buttons: [{ label: 'OK', value: 'ok', primary: true }] });
+    rerender();
+  } catch (e) { showError(e); }
+}
+
+const pickFile = (onFile) => {
+  const input = h('input', { type: 'file', accept: '.vcf,.vcard,.csv,text/vcard,text/x-vcard,text/csv', hidden: true,
+    onchange: () => { onFile(input.files[0]); input.remove(); } });
+  document.body.append(input);
+  input.click();
+};
 
 const initials = (c) => (c.fn || '?').split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
@@ -101,6 +130,11 @@ export async function renderContacts(main, ctx) {
           const name = await promptDialog('Rename address book', 'Name', book.name, 'Save');
           if (name) await patch(`/api/addressbooks/${book.id}`, { name }).then(rerender, showError);
         } },
+        { label: 'Import contacts (.vcf, .csv)', icon: 'upload', onclick: () => pickFile((f) => importContacts(book, f, rerender)) },
+        { label: 'Export contacts (.vcf)', icon: 'download', onclick: () => {
+          const a = h('a', { href: `/api/addressbooks/${book.id}/export`, download: `${book.name}.vcf` });
+          document.body.append(a); a.click(); a.remove();
+        } },
         { label: 'Copy CardDAV link', icon: 'link', onclick: () => copyText(`${location.origin}/dav/addressbooks/${encodeURIComponent(ctx.me.id)}/${encodeURIComponent(book.uri)}/`) },
         '-',
         { label: 'Delete address book', icon: 'trash', danger: true, onclick: async () => {
@@ -108,11 +142,16 @@ export async function renderContacts(main, ctx) {
         } },
       ]) }, icon('more'))),
       search,
-      h('button', { class: 'btn primary block', onclick: () => { currentUri = null; drawList(); drawDetail(null); } }, icon('plus'), 'New contact'),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn primary grow', onclick: () => { currentUri = null; drawList(); drawDetail(null); } }, icon('plus'), 'New contact'),
+        h('button', { class: 'btn', title: 'Import a .vcf or .csv file', onclick: () => pickFile((f) => importContacts(book, f, rerender)) }, icon('upload'), 'Import')),
       list),
     detail));
+  // Dropping a .vcf / .csv file anywhere on the contacts view imports it.
+  attachDropZone(main.querySelector('.contacts-view'), (items) => importContacts(book, items[0]?.file ?? items[0], rerender));
   drawList();
   const selected = contacts.find((c) => c.uri === currentUri);
   if (selected) drawDetail(selected);
-  else detail.replaceChildren(h('div', { class: 'empty' }, icon('contacts'), h('p', {}, `${contacts.length} contact(s)`)));
+  else detail.replaceChildren(h('div', { class: 'empty' }, icon('contacts'), h('p', {}, `${contacts.length} contact(s)`),
+    h('p', { class: 'muted small' }, 'Import contacts from your phone, Google, Outlook or iCloud: export them as a .vcf (or .csv) file, then use Import or drop the file here.')));
 }

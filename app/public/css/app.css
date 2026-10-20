@@ -162,11 +162,13 @@ progress { accent-color: var(--accent); }
 .notice { display: flex; gap: 8px; align-items: center; color: var(--muted); background: var(--bg-soft); padding: 8px 12px; border-radius: 8px; }
 
 .files-view { position: relative; border-radius: var(--radius); min-height: 60vh; }
-.files-view.dragging::after {
+.contacts-view { position: relative; }
+.files-view.dragging::after, .contacts-view.dragging::after {
   content: "Drop to upload"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   border: 2px dashed var(--accent); border-radius: var(--radius); background: color-mix(in srgb, var(--accent-soft) 80%, transparent);
   color: var(--accent); font-size: 1.3rem; font-weight: 600; pointer-events: none;
 }
+.contacts-view.dragging::after { content: "Drop a .vcf or .csv file to import"; z-index: 2; }
 .selection-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 10px; margin-bottom: 8px; background: var(--accent-soft); border-radius: 8px; }
 .selection-bar > span { font-weight: 600; margin-right: 8px; }
 

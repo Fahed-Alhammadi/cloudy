@@ -256,5 +256,9 @@ class Api(private val session: Session) {
     suspend fun saveContact(bookId: Long, c: Contact): Contact =
         if (c.uri.isEmpty()) decode(sendJson("POST", "/api/addressbooks/$bookId/contacts", contactBody(c)))
         else decode(sendJson("PUT", "/api/addressbooks/$bookId/contacts/${enc(c.uri)}", contactBody(c)))
+    /** Imports a .vcf or .csv file (raw bytes) into an address book. */
+    suspend fun importContacts(bookId: Long, bytes: ByteArray): ImportResult =
+        decode(send("POST", "/api/addressbooks/$bookId/import", bytes.toRequestBody(binType)))
+    suspend fun exportContacts(bookId: Long): String = send("GET", "/api/addressbooks/$bookId/export")
     suspend fun deleteContact(bookId: Long, uri: String) { send("DELETE", "/api/addressbooks/$bookId/contacts/${enc(uri)}") }
 }

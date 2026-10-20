@@ -30,6 +30,9 @@ database inside), a browser app, and a native Android app that updates itself fr
   and the Android app; the built-in LibreOffice turns them into PDF — inside the same container.
 - **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
   (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
+- **Contacts import/export:** bring contacts in from a `.vcf` (phone Contacts app, Google, Outlook, iCloud; vCard
+  2.1–4.0) or a `.csv` (Google, Outlook) in the browser or the Android app — duplicates are skipped — and export an
+  address book as one `.vcf`.
 - **Email:** password reset by email, share notifications and security notices through your SMTP server.
 - **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and email (SMTP) settings.
 

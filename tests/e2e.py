@@ -290,6 +290,43 @@ check('JSON contact is valid vCard 3.0', b'VERSION:3.0' in body and b'N:Hopper;G
 s, c3 = admin.req('PUT', f"/api/addressbooks/{bk['id']}/contacts/{c2['uri']}", {**c2, 'title': 'Rear Admiral'})
 check('update contact', s == 200 and c3['title'] == 'Rear Admiral', c3)
 
+print('== contacts import / export')
+s, books = admin.req('GET', '/api/addressbooks')
+book = next((b for b in books), None) or admin.req('POST', '/api/addressbooks', {'name': 'Contacts'})[1]
+s, ib = admin.req('POST', '/api/addressbooks', {'name': 'Import test'})
+bid = ib['id']
+v21 = ('BEGIN:VCARD\r\nVERSION:2.1\r\nN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=D8=B9=D9=84=D9=8A;;;;\r\n'
+       'FN;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=D8=B9=D9=84=D9=8A\r\nTEL;CELL:+971 50 000 0001\r\nEND:VCARD\r\n'
+       'BEGIN:VCARD\r\nVERSION:3.0\r\nUID:e2e-uid-1\r\nFN:Jane Doe\r\nN:Doe;Jane;;;\r\nEMAIL:jane@example.com\r\nEND:VCARD\r\n'
+       'BEGIN:VCARD\r\nVERSION:2.1\r\nEND:VCARD\r\n').encode()
+oct_h = {'Content-Type': 'application/octet-stream'}
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', v21, headers=oct_h)
+check('import vCard 2.1 + 3.0', s == 200 and r['imported'] == 2 and r['skipped'] == 1, r)
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', v21, headers=oct_h)
+check('re-import adds no duplicates', s == 200 and r['imported'] == 0 and r['updated'] == 1 and r['duplicates'] == 1, r)
+upd = v21.replace(b'EMAIL:jane@example.com', b'EMAIL:jane@new.example')
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', upd, headers=oct_h)
+s, cs = admin.req('GET', f'/api/addressbooks/{bid}/contacts')
+names = sorted(c['fn'] for c in cs)
+check('imported contacts readable (Arabic name, updated by UID)', names == sorted(['علي', 'Jane Doe']) and any(c['emails'] == ['jane@new.example'] for c in cs), cs)
+csv = ('﻿First Name,Last Name,E-mail 1 - Value,Phone 1 - Value,Organization Name\n'
+       'Omar,Saleh,omar@example.com ::: o.saleh@example.com,+971500000002,ACME\n'
+       'Jane,Doe,jane@new.example,,\n').encode()
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', csv, headers=oct_h)
+check('import Google CSV (existing person skipped)', s == 200 and r['format'] == 'csv' and r['imported'] == 1 and r['duplicates'] == 1, r)
+s, cs = admin.req('GET', f'/api/addressbooks/{bid}/contacts')
+omar = next((c for c in cs if c['fn'] == 'Omar Saleh'), {})
+check('CSV fields mapped', len(omar.get('emails', [])) == 2 and omar.get('org') == 'ACME' and omar.get('phones') == ['+971500000002'], omar)
+s, body, hd = admin.req('GET', f'/api/addressbooks/{bid}/export', raw=True)
+check('export all as .vcf', s == 200 and body.count(b'BEGIN:VCARD') == 3 and 'vcard' in hd.get('Content-Type', ''), body[:200])
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', b'foo,bar\n1,2\n', headers=oct_h)
+check('unrecognized file rejected with a message', s == 400 and 'columns' in r.get('error', ''), r)
+s, r = admin.req('POST', f'/api/addressbooks/{bid}/import', body, headers=oct_h)
+check('importing own export changes nothing new', s == 200 and r['imported'] == 0, r)
+s, _ = bobc.req('POST', f'/api/addressbooks/{bid}/import', v21, headers=oct_h)
+check("cannot import into someone else's address book", s == 404)
+admin.req('DELETE', f'/api/addressbooks/{bid}')
+
 print('== mobile token auth')
 mob = Client()
 s, r = mob.req('POST', '/api/auth/token', {'user': ADMIN, 'password': ADMIN_PW, 'deviceName': 'Test phone'})

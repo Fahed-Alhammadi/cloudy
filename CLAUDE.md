@@ -28,6 +28,8 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
   `DATA_DIR/cache/previews/<id>-<etag>.pdf`), `GET /api/office` lists extensions. Web: `public/js/office.js` + viewer.
 - `app/src/mail.ts` — SMTP settings (`settings.smtp`, admin `/api/admin/mail*`), `sendMail` (background) / `sendMailNow`,
   password reset (`/api/auth/forgot|reset|options`, `password_resets`), share + password-changed notifications.
+- `app/src/contacts-import.ts` — parses uploaded contacts: vCard 2.1–4.0 (normalized to 3.0/4.0) and CSV (Google,
+  Outlook, simple); routes `/api/addressbooks/:id/import|export` in `api/groupware.ts` (UID update, duplicate skip).
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
@@ -84,6 +86,9 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: 1.8.0 — Contacts import from .vcf (vCard 2.1–4.0, QP/charsets) and .csv (Google, Outlook) with
+  duplicate detection, and .vcf export; web (menu, Import button, drag & drop) and Android (picker, share sheet).
+  Server/Android 1.8.0 (code 7).
 - 2026-10-20: 1.7.0 — Email: admin SMTP settings + test, password reset by email (web; Android links to it), share
   notifications (per-user opt-out `notify_shares`), password-changed notice. Android: in-memory listing cache, fast
   transitions, IO off the UI thread, lazy PDF pages. fast-xml-parser 5.11.2 (security fixes). Server/Android 1.7.0 (code 6).

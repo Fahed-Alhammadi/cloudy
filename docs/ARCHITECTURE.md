@@ -191,3 +191,16 @@ and are sent in the background — failures are logged, never shown to the user 
   `GET /api/auth/options` tells the login page whether to offer it.
 - **Notifications**: new user/group shares (recipients with an email and `notify_shares`, not the sharer) and
   password changes. Links use `PUBLIC_URL` or the origin of the request that caused the email.
+
+## 12. Contacts import and export
+
+`POST /api/addressbooks/:id/import` takes the raw file (20 MB, 20,000 contacts at most); `contacts-import.ts`
+detects the format and encoding (UTF-8, UTF-16 with BOM, else Windows-1252).
+- **vCard**: cards are split, unfolded and normalized to 3.0 (4.0 stays 4.0): vCard 2.1 quoted-printable values
+  are decoded with their CHARSET, bare parameters become `TYPE=`, `item1.` groups are dropped, 2.1 text is escaped
+  for 3.0, cards without FN get one from N/ORG/EMAIL/TEL, and every card gets a UID. ical.js validates the result.
+- **CSV**: RFC 4180 with the delimiter guessed from the header (`,` `;` tab); columns are mapped by name (Google's
+  `E-mail 1 - Value`, `::: `-separated multi-values, Outlook's `Home Street`… parts, plain `Name/Email/Phone`).
+- **Duplicates**: a card whose UID exists replaces that contact; otherwise a contact with the same name and a shared
+  email or phone (last 9 digits) is skipped. The response counts `imported`, `updated`, `duplicates`, `skipped`.
+- `GET /api/addressbooks/:id/export` returns every card as one `text/vcard` file.

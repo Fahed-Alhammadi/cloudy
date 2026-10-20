@@ -166,3 +166,14 @@ data class ChangeEvent(val folders: List<Long> = emptyList(), val shares: Boolea
 /** `GET /api/office`: extensions the server can show as PDF previews (`/api/nodes/{id}/preview`). */
 @Serializable
 data class OfficeInfo(val enabled: Boolean = false, val extensions: List<String> = emptyList())
+
+/** `POST /api/addressbooks/{id}/import` result. */
+@Serializable
+data class ImportResult(
+    val format: String = "",
+    val imported: Int = 0,
+    val updated: Int = 0,
+    val duplicates: Int = 0,
+    val skipped: Int = 0,
+    val errors: List<String> = emptyList(),
+)

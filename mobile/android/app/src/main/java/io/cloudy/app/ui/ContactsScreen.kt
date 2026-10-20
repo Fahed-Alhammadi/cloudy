@@ -1,5 +1,17 @@
 package io.cloudy.app.ui
 
+import java.io.File
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import io.cloudy.app.data.ImportResult
+import androidx.core.content.FileProvider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.FileUpload
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -79,6 +91,49 @@ fun ContactsScreen() {
     var editing by remember { mutableStateOf<Contact?>(null) }
     var bookMenu by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
+    var moreMenu by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
+    var importResult by remember { mutableStateOf<ImportResult?>(null) }
+
+    // Import: pick a .vcf or .csv file (exported from the phone's Contacts app, Google, Outlook or iCloud).
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val b = book
+        if (uri == null || b == null) return@rememberLauncherForActivityResult
+        importing = true
+        scope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Cannot read the file")
+                }
+                if (bytes.size > 20 * 1024 * 1024) error("That file is too large (20 MB at most)")
+                importResult = Services.api.importContacts(b.id, bytes)
+                reloadKey++
+            } catch (e: Exception) {
+                toast(context, e.message ?: "Import failed")
+            } finally {
+                importing = false
+            }
+        }
+    }
+
+    // Export: the whole address book as one .vcf, handed to the share sheet (save to Files, send, …).
+    fun export() {
+        val b = book ?: return
+        scope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    File(context.cacheDir, "export").apply { mkdirs() }.resolve("${b.name.replace(Regex("[^\\w .-]"), "_")}.vcf")
+                        .apply { writeText(Services.api.exportContacts(b.id)) }
+                }
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+                context.startActivity(Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).setType("text/x-vcard").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    "Export contacts"))
+            } catch (e: Exception) {
+                toast(context, e.message ?: "Export failed")
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         runCatching { Services.api.addressBooks() }.onSuccess { books = it; if (book == null) book = it.firstOrNull() }
@@ -97,6 +152,22 @@ fun ContactsScreen() {
         return
     }
 
+    importResult?.let { r ->
+        AlertDialog(
+            onDismissRequest = { importResult = null },
+            title = { Text("Import finished") },
+            text = {
+                Text(listOfNotNull(
+                    "${r.imported} new contact(s) added.",
+                    if (r.updated > 0) "${r.updated} existing contact(s) updated." else null,
+                    if (r.duplicates > 0) "${r.duplicates} skipped (already in the address book)." else null,
+                    if (r.skipped > 0) "${r.skipped} could not be read." else null,
+                ).joinToString("\n"))
+            },
+            confirmButton = { TextButton(onClick = { importResult = null }) { Text("OK") } },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(title = {
@@ -108,11 +179,25 @@ fun ContactsScreen() {
                         books.forEach { b -> DropdownMenuItem({ Text(b.name) }, onClick = { book = b; bookMenu = false }) }
                     }
                 }
+            }, actions = {
+                if (book != null) Box {
+                    IconButton(onClick = { moreMenu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
+                    DropdownMenu(moreMenu, { moreMenu = false }) {
+                        DropdownMenuItem({ Text("Import from file (.vcf, .csv)") }, leadingIcon = { Icon(Icons.Outlined.FileUpload, null) }, onClick = {
+                            moreMenu = false
+                            pickFile.launch(arrayOf("text/x-vcard", "text/vcard", "text/directory", "text/csv", "text/comma-separated-values", "*/*"))
+                        })
+                        DropdownMenuItem({ Text("Export (.vcf)") }, leadingIcon = { Icon(Icons.Outlined.FileDownload, null) }, onClick = {
+                            moreMenu = false; export()
+                        })
+                    }
+                }
             })
         },
         floatingActionButton = { if (book != null) FloatingActionButton(onClick = { editing = Contact() }) { Icon(Icons.Filled.Add, "New contact") } },
     ) { pad ->
         Column(Modifier.padding(pad)) {
+            if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())
             OutlinedTextField(query, { query = it }, placeholder = { Text("Search contacts") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             val list = contacts?.filter { c ->
@@ -120,7 +205,8 @@ fun ContactsScreen() {
             }
             when {
                 list == null -> Loading()
-                list.isEmpty() -> EmptyState(Icons.Outlined.Contacts, if (contacts.isNullOrEmpty()) "No contacts yet" else "No matches")
+                list.isEmpty() -> EmptyState(Icons.Outlined.Contacts,
+                    if (contacts.isNullOrEmpty()) "No contacts yet.\nTap ⋮ → Import to add them from a .vcf or .csv file (export them from your phone's Contacts app, Google or Outlook)." else "No matches")
                 else -> LazyColumn {
                     items(list, key = { it.uri }) { c ->
                         ListItem(
