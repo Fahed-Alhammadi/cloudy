@@ -12,6 +12,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Mutex
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.BoxWithConstraints
 import io.cloudy.app.data.Office
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.outlined.Save
@@ -175,37 +180,70 @@ private fun MediaPlayer(n: FileNode) {
 @Composable
 private fun PdfView(n: FileNode, preview: Boolean = false) {
     val context = LocalContext.current
-    var pages by remember { mutableStateOf<List<Bitmap>?>(null) }
+    var doc by remember { mutableStateOf<PdfDoc?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(n.id, n.etag) {
         try {
-            val file = (if (preview) null else Services.offline.localFile(n)) ?: File(context.cacheDir, "pdf/${n.id}-${n.etag}.pdf").also {
-                if (!it.exists()) {
-                    it.parentFile?.listFiles()?.filter { f -> f.name.startsWith("${n.id}-") }?.forEach { f -> f.delete() }
-                    if (preview) Services.api.downloadUrlTo(Services.api.previewUrl(n.id), it) else Services.api.download(n.id, it)
+            val file = withContext(Dispatchers.IO) {
+                (if (preview) null else Services.offline.localFile(n)) ?: File(context.cacheDir, "pdf/${n.id}-${n.etag}.pdf").also {
+                    if (!it.exists()) it.parentFile?.listFiles()?.filter { f -> f.name.startsWith("${n.id}-") }?.forEach { f -> f.delete() }
                 }
             }
-            pages = withContext(Dispatchers.IO) {
-                PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { r ->
-                    (0 until minOf(r.pageCount, 200)).map { i ->
-                        r.openPage(i).use { p ->
-                            val w = 1240
-                            val bmp = Bitmap.createBitmap(w, (w.toFloat() * p.height / p.width).toInt(), Bitmap.Config.ARGB_8888)
-                            bmp.eraseColor(android.graphics.Color.WHITE)
-                            p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            bmp
-                        }
-                    }
-                }
+            if (!file.exists()) {
+                if (preview) Services.api.downloadUrlTo(Services.api.previewUrl(n.id), file) else Services.api.download(n.id, file)
             }
+            doc = withContext(Dispatchers.IO) { PdfDoc(file) }
         } catch (e: Exception) { error = if (preview) "Preview not available: ${e.message}" else e.message }
     }
+    DisposableEffect(doc) { val d = doc; onDispose { d?.close() } }
+    val d = doc
     when {
         error != null -> EmptyState(Icons.Outlined.CloudOff, error!!)
-        pages == null -> Loading()
-        else -> LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(pages!!) { bmp -> Image(bmp.asImageBitmap(), null, Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth) }
+        d == null -> Loading()
+        else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+            val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }.coerceIn(480, 1600)
+            // Pages render on demand as they scroll into view, one at a time.
+            LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainer), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(d.pageCount) { i ->
+                    var bmp by remember(i) { mutableStateOf<Bitmap?>(null) }
+                    LaunchedEffect(i, widthPx) { bmp = d.render(i, widthPx) }
+                    val b = bmp
+                    if (b != null) Image(b.asImageBitmap(), "Page ${i + 1}", Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
+                    else Box(Modifier.fillMaxWidth().aspectRatio(d.aspect(i)).background(Color.White))
+                }
+            }
         }
+    }
+}
+
+/** An open PDF; renders single pages on a background thread (PdfRenderer allows one open page at a time). */
+private class PdfDoc(file: File) {
+    private val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+    private val renderer = PdfRenderer(fd)
+    private val lock = Mutex()
+    private val aspects = HashMap<Int, Float>()
+    private var closed = false
+    val pageCount = renderer.pageCount
+
+    /** Width / height of page [i] (A4 portrait until the page has been opened once). */
+    fun aspect(i: Int): Float = aspects[i] ?: (1f / 1.414f)
+
+    suspend fun render(i: Int, width: Int): Bitmap? = lock.withLock {
+        if (closed) return@withLock null
+        withContext(Dispatchers.IO) {
+            renderer.openPage(i).use { p ->
+                aspects[i] = p.width.toFloat() / p.height
+                val bmp = Bitmap.createBitmap(width, (width.toFloat() * p.height / p.width).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+                bmp.eraseColor(android.graphics.Color.WHITE)
+                p.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                bmp
+            }
+        }
+    }
+
+    fun close() {
+        // In the background, after a render in progress has finished (never block the UI thread).
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { lock.withLock { closed = true; renderer.close(); fd.close() } }
     }
 }
 

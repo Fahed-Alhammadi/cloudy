@@ -30,7 +30,8 @@ database inside), a browser app, and a native Android app that updates itself fr
   and the Android app; the built-in LibreOffice turns them into PDF — inside the same container.
 - **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
   (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
-- **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and publishing Android releases.
+- **Email:** password reset by email, share notifications and security notices through your SMTP server.
+- **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and email (SMTP) settings.
 
 ## Install
 
@@ -176,6 +177,19 @@ first time it's opened (usually a second or two) and keeps the result until the 
 document, download it and upload the new version — Cloudy keeps the old one under *Versions*.
 
 Text files (`.txt`, `.md`, `.csv`, …) can be edited directly in the browser and the Android app.
+
+## Email
+
+Set up an SMTP server under *Administration → Email (SMTP)* (server, port, encryption, login, sender) and use
+*Save and send test* to check it. Cloudy then:
+- shows **Forgot password?** on the login page (web and Android): the user enters their username or email and
+  gets a one-time link, valid 60 minutes, to choose a new password. The answer never reveals whether an account
+  exists, and requests are rate-limited. A reset signs the account out everywhere;
+- emails users when a file or folder is shared with them (each user can turn this off under *Settings → Profile*);
+- sends a security notice when a password is changed.
+
+Emails go to the address in each user's profile. Leave the SMTP server empty to turn email off. The SMTP password
+is stored in the database and never shown again in the web UI.
 
 ## Passkeys
 

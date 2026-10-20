@@ -1,6 +1,6 @@
 {
   "name": "cloudy",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted file cloud with sharing, WebDAV, CalDAV and CardDAV — Node.js server with an HTML5 web app.",
@@ -12,8 +12,9 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "fast-xml-parser": "5.2.5",
+    "fast-xml-parser": "5.11.2",
     "ical.js": "2.2.1",
+    "nodemailer": "10.0.15",
     "pg": "8.16.3",
     "qrcode": "1.5.4"
   },

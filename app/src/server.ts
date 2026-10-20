@@ -19,6 +19,7 @@ import { registerShares } from './api/shares.ts';
 import { registerGroupware } from './api/groupware.ts';
 import { openStream, startLiveUpdates } from './events.ts';
 import { registerOffice, pruneOfficeCache } from './office.ts';
+import { registerMail, expirePasswordResets } from './mail.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
 
@@ -41,6 +42,7 @@ registerUploadChunks(router);
 registerShares(router, authed);
 registerGroupware(router, authed);
 registerOffice(router, authed);
+registerMail(router, authed, admin);
 // Live updates (Server-Sent Events): {folders, shares} whenever something the user can see changes.
 router.get('/api/events', authed(async ({ res }, user) => openStream(user.id, res)));
 // The Android APK is published on GitHub releases (stable asset name Cloudy.apk).
@@ -130,6 +132,7 @@ async function jobs(): Promise<void> {
     await q(`DELETE FROM sessions WHERE expires_at < now()`);
     await expireUploads();
     await pruneOfficeCache();
+    await expirePasswordResets();
     const n = await expireTrash();
     if (n) console.log(`purged ${n} expired trash item(s)`);
   } catch (e) {

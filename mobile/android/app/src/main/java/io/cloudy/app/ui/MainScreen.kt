@@ -1,6 +1,11 @@
 package io.cloudy.app.ui
 
 import android.net.Uri
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -72,6 +77,8 @@ import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
 
+private const val NAV_MS = 180
+
 private data class Tab(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector)
 
 @Composable
@@ -110,7 +117,13 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
         }
     }) { pad ->
         UpdatePrompt()
-        NavHost(nav, startDestination = "files/$rootId", modifier = Modifier.padding(bottom = pad.calculateBottomPadding())) {
+        // Short transitions: the library default is a 700 ms cross-fade, which makes every tap feel slow.
+        NavHost(nav, startDestination = "files/$rootId", modifier = Modifier.padding(bottom = pad.calculateBottomPadding()),
+            enterTransition = { fadeIn(tween(NAV_MS)) + slideInHorizontally(tween(NAV_MS)) { it / 12 } },
+            exitTransition = { fadeOut(tween(NAV_MS / 2)) },
+            popEnterTransition = { fadeIn(tween(NAV_MS)) },
+            popExitTransition = { fadeOut(tween(NAV_MS / 2)) + slideOutHorizontally(tween(NAV_MS)) { it / 12 } },
+        ) {
             composable("files/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) {
                 FolderScreen(nav, it.arguments!!.getLong("id"), sharedUris)
             }

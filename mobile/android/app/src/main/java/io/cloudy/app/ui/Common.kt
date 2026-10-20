@@ -69,6 +69,8 @@ private val dateFmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, 
 fun formatDate(iso: String): String =
     runCatching { dateFmt.format(Instant.parse(iso).atZone(ZoneId.systemDefault())) }.getOrDefault("")
 
+private val ARCHIVE = Regex("zip|tar|gzip|7z|rar")
+
 fun iconFor(node: FileNode): Pair<ImageVector, Color> {
     val m = node.mime
     return when {
@@ -77,7 +79,7 @@ fun iconFor(node: FileNode): Pair<ImageVector, Color> {
         m.startsWith("video/") -> Icons.Outlined.VideoFile to Color(0xFFC05621)
         m.startsWith("audio/") -> Icons.Outlined.AudioFile to Color(0xFF8B5CF6)
         m == "application/pdf" -> Icons.Outlined.PictureAsPdf to Color(0xFFD03B3B)
-        Regex("zip|tar|gzip|7z|rar").containsMatchIn(m) -> Icons.Outlined.FolderZip to Color(0xFFA07A2C)
+        ARCHIVE.containsMatchIn(m) -> Icons.Outlined.FolderZip to Color(0xFFA07A2C)
         m.startsWith("text/") || m.contains("json") || m.contains("xml") -> Icons.Outlined.Article to Color(0xFF64708A)
         else -> Icons.AutoMirrored.Outlined.InsertDriveFile to Color(0xFF64708A)
     }

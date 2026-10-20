@@ -37,6 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import io.cloudy.app.Services
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.material3.TextButton
 import io.cloudy.app.work.Jobs
 import kotlinx.coroutines.launch
 
@@ -102,6 +105,12 @@ fun LoginScreen() {
                 Button(onClick = ::submit, enabled = !busy && user.isNotBlank() && password.isNotEmpty() && server.length > 8, modifier = Modifier.fillMaxWidth()) {
                     if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Log in")
                 }
+                // Password reset by email happens on the web (the link in the email opens the browser anyway).
+                TextButton(enabled = server.length > 8, onClick = {
+                    var url = server.trim().trimEnd('/')
+                    if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$url/#/forgot"))) }
+                }, modifier = Modifier.align(Alignment.End)) { Text("Forgot password?") }
                 Text("Your password is exchanged for a device token, visible under Settings → App passwords on the web.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }

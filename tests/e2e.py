@@ -1,5 +1,5 @@
 """End-to-end smoke test for Cloudy. Usage: python3 -I e2e.py http://localhost:8088 admin <password>"""
-import base64, http.cookiejar, io, json, os, sys, threading, time, urllib.request, urllib.error, zipfile, re, uuid
+import base64, email, email.header, http.cookiejar, io, json, os, socketserver, sys, threading, time, urllib.request, urllib.error, zipfile, re, uuid
 
 BASE, ADMIN, ADMIN_PW = sys.argv[1], sys.argv[2], sys.argv[3]
 passed = failed = 0
@@ -34,6 +34,13 @@ class Client:
         if raw: return resp.status, content, resp.headers
         ct = resp.headers.get('content-type') or ''
         return resp.status, (json.loads(content) if 'json' in ct and content else content.decode(errors='replace'))
+
+def wait_for(pred, seconds=5):
+    end = time.time() + seconds
+    while time.time() < end:
+        if pred(): return True
+        time.sleep(0.1)
+    return False
 
 admin = Client()
 print('== auth')
@@ -312,6 +319,92 @@ check('Android download redirects to GitHub releases', s == 302 and loc.startswi
 s, _ = admin.req('GET', '/api/admin/app/android')
 check('server-side APK publishing removed', s == 404)
 
+print('== email (SMTP)')
+mails = []
+class FakeSMTP(socketserver.StreamRequestHandler):
+    # Just enough SMTP for nodemailer without TLS/auth; stores each message.
+    def handle(self):
+        w = lambda line: self.wfile.write((line + '\r\n').encode())
+        w('220 fake ESMTP')
+        rcpt = []
+        while True:
+            raw = self.rfile.readline()
+            if not raw: return
+            cmd = raw.decode(errors='replace').strip(); up = cmd.upper()
+            if up.startswith('EHLO'): w('250-fake'); w('250 8BITMIME')
+            elif up.startswith('MAIL FROM'): rcpt = []; w('250 OK')
+            elif up.startswith('RCPT TO'): rcpt.append(cmd.split(':', 1)[1].strip(' <>')); w('250 OK')
+            elif up == 'DATA':
+                w('354 go'); data = []
+                while True:
+                    l = self.rfile.readline()
+                    if not l or l in (b'.\r\n', b'.\n'): break
+                    data.append(l[1:] if l.startswith(b'..') else l)
+                msg = email.message_from_bytes(b''.join(data))
+                body = next((p.get_payload(decode=True).decode() for p in msg.walk() if p.get_content_type() == 'text/plain'), '')
+                mails.append({'to': rcpt, 'subject': str(email.header.make_header(email.header.decode_header(msg['Subject']))), 'body': body})
+                w('250 queued')
+            elif up == 'QUIT': w('221 bye'); return
+            else: w('250 OK')
+
+s, _ = admin.req('PUT', '/api/admin/mail', {'host': 'smtp.invalid', 'port': 2525, 'security': 'none', 'fromEmail': 'no-mail'})
+check('invalid sender address rejected', s == 400)
+s, _ = Client().req('GET', '/api/admin/mail')
+check('mail settings need admin', s == 401)
+smtp_host = os.environ.get('CLOUDY_TEST_SMTP_HOST')
+s, _ = admin.req('PUT', '/api/admin/mail', {'host': smtp_host or 'smtp.invalid', 'port': 2525, 'security': 'none',
+                                            'user': '', 'password': 'smtp-secret', 'fromName': 'Cloudy CI', 'fromEmail': 'cloudy@example.com'})
+check('save mail settings', s == 204)
+s, conf = admin.req('GET', '/api/admin/mail')
+check('mail password never returned', s == 200 and 'password' not in conf and conf['hasPassword'] is True and conf['port'] == 2525, conf)
+s, opts = Client().req('GET', '/api/auth/options')
+check('login page offers password reset', s == 200 and opts['passwordReset'] is True)
+s, _ = Client().req('POST', '/api/auth/forgot', {'login': 'nobody-' + uuid.uuid4().hex})
+check('forgot password does not reveal accounts', s == 204)
+s, r = Client().req('POST', '/api/auth/reset', {'token': 'bogus', 'password': 'whatever-123'})
+check('bad reset token rejected', s == 400)
+
+if not smtp_host:
+    print('  skip delivery tests (set CLOUDY_TEST_SMTP_HOST to the address the server uses to reach this machine)')
+else:
+    srv = socketserver.ThreadingTCPServer(('0.0.0.0', 2525), FakeSMTP); srv.daemon_threads = True
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    got = lambda pred: wait_for(lambda: any(pred(m) for m in mails), 15)
+    s, r = admin.req('POST', '/api/admin/mail/test', {'to': 'admin@example.com'})
+    check('test email delivered', s == 200 and got(lambda m: m['to'] == ['admin@example.com'] and 'test' in m['subject'].lower()), (s, r, mails))
+    dave = 'dave' + uuid.uuid4().hex[:6]
+    admin.req('POST', '/api/admin/users', {'id': dave, 'password': 'dave-pass-123', 'email': f'{dave}@example.com', 'displayName': 'Dave'})
+    s, f2 = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'mail-' + uuid.uuid4().hex[:6]})
+    admin.req('POST', f"/api/nodes/{f2['id']}/shares", {'type': 'user', 'shareWith': dave})
+    check('share notification emailed', got(lambda m: m['to'] == [f'{dave}@example.com'] and f2['name'] in m['subject']), mails)
+    davec = Client(); davec.req('POST', '/api/login', {'user': dave, 'password': 'dave-pass-123'})
+    davec.req('PATCH', '/api/me', {'notifyShares': False})
+    s, me_d = davec.req('GET', '/api/me')
+    check('notification preference saved', me_d.get('notifyShares') is False)
+    s, f3 = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'quiet-' + uuid.uuid4().hex[:6]})
+    admin.req('POST', f"/api/nodes/{f3['id']}/shares", {'type': 'user', 'shareWith': dave})
+    s, _ = Client().req('POST', '/api/auth/forgot', {'login': f'{dave.upper()}@EXAMPLE.COM'})
+    check('reset link emailed (lookup by email)', s == 204 and got(lambda m: m['to'] == [f'{dave}@example.com'] and '#/reset/' in m['body']), mails)
+    check('opted-out user gets no share email', not any(f3['name'] in m['subject'] for m in mails))
+    token = re.search(r'#/reset/([\w-]+)', [m for m in mails if '#/reset/' in m['body']][-1]['body']).group(1)
+    s, _ = Client().req('POST', '/api/auth/reset', {'token': token, 'password': 'short'})
+    check('reset enforces password rules', s == 400)
+    s, _ = Client().req('POST', '/api/auth/reset', {'token': token, 'password': 'dave-new-pass-1'})
+    check('reset with emailed link', s == 204)
+    s, _ = Client().req('POST', '/api/auth/reset', {'token': token, 'password': 'dave-new-pass-2'})
+    check('reset link works only once', s == 400)
+    s, _ = davec.req('GET', '/api/me')
+    check('reset signs out existing sessions', s == 401)
+    s, _ = Client().req('POST', '/api/login', {'user': dave, 'password': 'dave-new-pass-1'})
+    check('login with new password', s == 200)
+    check('password-changed notice emailed', got(lambda m: m['to'] == [f'{dave}@example.com'] and 'password was changed' in m['subject']), mails)
+    srv.shutdown()
+    admin.req('DELETE', f"/api/nodes/{f2['id']}"); admin.req('DELETE', f"/api/nodes/{f3['id']}")
+    admin.req('DELETE', f'/api/admin/users/{dave}')
+s, _ = admin.req('PUT', '/api/admin/mail', {'host': ''})
+s, opts = Client().req('GET', '/api/auth/options')
+check('turning email off hides password reset', opts['passwordReset'] is False)
+
 print('== two-factor authentication')
 import hmac, struct, time
 def totp(secret_b32, step_offset=0):
@@ -400,13 +493,6 @@ def listen(client, sink):
         except Exception:
             pass
     threading.Thread(target=run, daemon=True).start()
-
-def wait_for(pred, seconds=5):
-    end = time.time() + seconds
-    while time.time() < end:
-        if pred(): return True
-        time.sleep(0.1)
-    return False
 
 s, live = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'live-' + uuid.uuid4().hex[:6]})
 s, private = admin.req('POST', f'/api/nodes/{root}/folders', {'name': 'private-' + uuid.uuid4().hex[:6]})

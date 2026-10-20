@@ -34,6 +34,7 @@ class Session(context: Context) {
     }
 
     fun signOut() {
+        ListCache.clear()
         token = null
         prefs.edit().remove("token").remove("user").apply()
         _user.value = null

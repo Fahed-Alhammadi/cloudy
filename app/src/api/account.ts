@@ -10,6 +10,7 @@ import { createUser, deleteUser, setGroups, userJson, USER_ID_RE } from '../user
 import { rootOf } from '../files.ts';
 import { newSecret, otpauthUri, verifyTotp, newRecoveryCodes, normalizeRecoveryCode } from '../totp.ts';
 import QRCode from 'qrcode';
+import { notifyPasswordChanged } from '../mail.ts';
 
 async function requirePassword(userId: string, password: unknown): Promise<void> {
   const row = await one<{ password_hash: string }>(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
@@ -66,9 +67,10 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
 
   r.patch('/api/me', authed(async ({ req, res }, user) => {
     const b = await readJson(req);
-    await q(`UPDATE users SET display_name = COALESCE($2, display_name), email = COALESCE($3, email) WHERE id = $1`,
+    await q(`UPDATE users SET display_name = COALESCE($2, display_name), email = COALESCE($3, email),
+                              notify_shares = COALESCE($4, notify_shares) WHERE id = $1`,
       [user.id, typeof b.displayName === 'string' ? b.displayName.trim() || user.id : null,
-       typeof b.email === 'string' ? b.email.trim() : null]);
+       typeof b.email === 'string' ? b.email.trim() : null, typeof b.notifyShares === 'boolean' ? b.notifyShares : null]);
     noContent(res);
   }));
 
@@ -114,6 +116,7 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
     if (!(await verifyPassword(String(b.current ?? ''), row!.password_hash))) throw new HttpError(403, 'Current password is wrong');
     await q(`UPDATE users SET password_hash = $2 WHERE id = $1`, [user.id, await hashPassword(checkPasswordStrength(b.password))]);
     forgetBasicCache();
+    await notifyPasswordChanged(req, user.id);
     noContent(res);
   }));
 
@@ -149,7 +152,7 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
 
   // ---------------------------------------------------------------- admin
   r.get('/api/admin/users', admin(async ({ res }) => {
-    const users = await q<User>(`SELECT id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled FROM users ORDER BY id`);
+    const users = await q<User>(`SELECT id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled, notify_shares FROM users ORDER BY id`);
     json(res, await Promise.all(users.map(userJson)));
   }));
 

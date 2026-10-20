@@ -26,18 +26,20 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `app/src/events.ts` — live updates: LISTEN on `cloudy_changes` (triggers in schema.sql) → SSE `GET /api/events` `{folders, shares}`.
 - `app/src/office.ts` — read-only office previews: `GET /api/nodes/:id/preview` = LibreOffice → PDF (queued, cached in
   `DATA_DIR/cache/previews/<id>-<etag>.pdf`), `GET /api/office` lists extensions. Web: `public/js/office.js` + viewer.
+- `app/src/mail.ts` — SMTP settings (`settings.smtp`, admin `/api/admin/mail*`), `sendMail` (background) / `sendMailNow`,
+  password reset (`/api/auth/forgot|reset|options`, `password_resets`), share + password-changed notifications.
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
   chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`. `/download/android` (server.ts)
   redirects to the latest GitHub release's `Cloudy.apk` (`APP_REPO`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, AppUpdater = GitHub releases, Live = SSE + Office preview types),
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ListCache = in-memory listings, AppUpdater = GitHub releases, Live = SSE + Office),
   `work/Workers.kt` (photo backup, offline sync, daily update check), `ui/` screens (PreviewScreen edits text files).
   `build-apk.sh` → `mobile/dist/`.
 
 ## Tech Stack
-Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`; Postgres 17 (Debian);
+Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`, `nodemailer`; Postgres 17 (Debian);
 LibreOffice `*-nogui` packages (headless conversion to PDF).
 Web: vanilla JS modules, `<dialog>`, drag-and-drop, XHR chunk upload. Android: Kotlin 2.1, Compose (BOM 2024.12),
 OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35, minSdk 26.
@@ -74,11 +76,17 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
   need their own trigger. Clients must tolerate duplicate/early events (they just reload).
 - Office files are view-only (PDF previews); only text files are editable (web + Android, `PUT /api/nodes/:id/content`).
   Image ~1.3 GB (LibreOffice + fonts); PostgreSQL's LLVM JIT is deleted (`jit=off`).
+- Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
+  short NavHost transitions (`NAV_MS`); PDFs render one page at a time on demand.
+- Email is optional: `sendMail` is a no-op without SMTP settings; never reveal whether an account exists.
 - Android updates: the app never sends Cloudy credentials to GitHub (`Api.plainHttp`); update prefs are keyed by
   versionName (`skippedVersion`, `notifiedVersion`).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: 1.7.0 — Email: admin SMTP settings + test, password reset by email (web; Android links to it), share
+  notifications (per-user opt-out `notify_shares`), password-changed notice. Android: in-memory listing cache, fast
+  transitions, IO off the UI thread, lazy PDF pages. fast-xml-parser 5.11.2 (security fixes). Server/Android 1.7.0 (code 6).
 - 2026-10-20: 1.6.0 — Collabora removed; office files viewed read-only as PDF via built-in LibreOffice (`office.ts`).
   Android updates itself from GitHub releases (admin "Android app" section, `/api/app/android`, `app_releases` table,
   `publish-apk.sh` removed; `/download/android` redirects to GitHub). Text files editable/creatable on Android.

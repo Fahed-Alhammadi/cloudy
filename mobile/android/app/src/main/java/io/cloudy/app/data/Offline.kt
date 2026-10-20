@@ -36,6 +36,8 @@ class Offline(context: Context, private val api: Api) {
     /** Any downloaded copy, even if outdated (used when offline). */
     fun anyLocalFile(id: Long): File? = File(root, "files/$id").listFiles()?.firstOrNull()
 
+    fun hasCachedListing(id: Long): Boolean = File(root, "dirs/$id.json").exists()
+
     fun cachedListing(id: Long): NodeListing? =
         runCatching { json.decodeFromString<NodeListing>(File(root, "dirs/$id.json").readText()) }.getOrNull()
 

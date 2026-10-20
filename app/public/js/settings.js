@@ -1,5 +1,5 @@
 // Personal settings and the admin console.
-import { get, post, patch, del } from './api.js';
+import { get, post, put, patch, del } from './api.js';
 import { h, icon, formatSize, fullDate, toast, showError, modal, confirmDialog, promptDialog, copyText } from './ui.js';
 import { passkeysSupported, createPasskey, isPasskeyCancel } from './passkey.js';
 
@@ -11,6 +11,7 @@ export async function renderSettings(main, ctx) {
 
   const name = h('input', { type: 'text', value: me.displayName });
   const email = h('input', { type: 'email', value: me.email });
+  const notifyShares = h('input', { type: 'checkbox', checked: me.notifyShares !== false });
   const cur = h('input', { type: 'password', autocomplete: 'current-password', required: true });
   const pw1 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true });
   const pct = me.quotaBytes ? Math.min(100, (me.used / me.quotaBytes) * 100) : 0;
@@ -27,11 +28,13 @@ export async function renderSettings(main, ctx) {
 
     h('form', { class: 'card form-grid', onsubmit: async (e) => {
       e.preventDefault();
-      await patch('/api/me', { displayName: name.value, email: email.value }).then(() => { toast('Profile saved'); ctx.refreshMe(); }, showError);
+      await patch('/api/me', { displayName: name.value, email: email.value, notifyShares: notifyShares.checked }).then(() => { toast('Profile saved'); ctx.refreshMe(); }, showError);
     } },
       h('h2', { class: 'wide' }, 'Profile'),
       h('label', { class: 'field' }, h('span', {}, 'Display name'), name),
       h('label', { class: 'field' }, h('span', {}, 'Email'), email),
+      h('label', { class: 'check wide' }, notifyShares, 'Email me when something is shared with me'),
+      h('p', { class: 'muted small wide' }, 'Your email is also used for password reset links and security notices.'),
       h('div', { class: 'wide row end' }, h('button', { class: 'btn primary', type: 'submit' }, 'Save profile'))),
 
     h('form', { class: 'card form-grid', onsubmit: async (e) => {
@@ -242,7 +245,7 @@ async function userDialog(user, groups, rerender) {
 }
 
 export async function renderAdmin(main, ctx) {
-  const [users, groups] = await Promise.all([get('/api/admin/users'), get('/api/admin/groups')]);
+  const [users, groups, mail] = await Promise.all([get('/api/admin/users'), get('/api/admin/groups'), get('/api/admin/mail')]);
   const rerender = () => renderAdmin(main, ctx).catch(showError);
   main.replaceChildren(h('section', { class: 'settings-view' },
     h('div', { class: 'toolbar' }, h('h1', { class: 'view-title' }, icon('shield'), 'Administration'), h('div', { class: 'grow' }),
@@ -274,5 +277,54 @@ export async function renderAdmin(main, ctx) {
         const id = await promptDialog('New group', 'Group name', '', 'Create');
         if (id) await post('/api/admin/groups', { id }).then(rerender, showError);
       } }, icon('plus'), 'New group')),
+    mailCard(mail, ctx, rerender),
   ));
+}
+
+// ---------------------------------------------------------------- email (SMTP)
+
+function mailCard(mail, ctx, rerender) {
+  const f = {
+    host: h('input', { type: 'text', value: mail?.host ?? '', placeholder: 'smtp.example.com' }),
+    port: h('input', { type: 'number', min: 1, max: 65535, value: mail?.port ?? 587 }),
+    security: h('select', {}, [['starttls', 'STARTTLS (port 587)'], ['tls', 'SSL/TLS (port 465)'], ['none', 'None (local relay only)']]
+      .map(([v, l]) => h('option', { value: v, selected: (mail?.security ?? 'starttls') === v }, l))),
+    user: h('input', { type: 'text', value: mail?.user ?? '', autocomplete: 'off' }),
+    password: h('input', { type: 'password', autocomplete: 'new-password', placeholder: mail?.hasPassword ? 'Unchanged' : '' }),
+    fromName: h('input', { type: 'text', value: mail?.fromName ?? 'Cloudy' }),
+    fromEmail: h('input', { type: 'email', value: mail?.fromEmail ?? '', placeholder: 'cloudy@example.com' }),
+  };
+  f.security.addEventListener('change', () => { f.port.value = f.security.value === 'tls' ? 465 : f.security.value === 'none' ? 25 : 587; });
+  const status = h('span', { class: 'muted' }, mail?.host ? 'Email is on.' : 'Email is off.');
+  const save = () => put('/api/admin/mail', {
+    host: f.host.value.trim(), port: Number(f.port.value), security: f.security.value, user: f.user.value.trim(),
+    password: f.password.value, fromName: f.fromName.value.trim(), fromEmail: f.fromEmail.value.trim(),
+  });
+  return h('form', { class: 'card form-grid', onsubmit: async (e) => {
+    e.preventDefault();
+    try { await save(); toast(f.host.value.trim() ? 'Email settings saved' : 'Email turned off'); rerender(); } catch (err) { showError(err); }
+  } },
+    h('h2', { class: 'wide' }, 'Email (SMTP)'),
+    h('p', { class: 'muted wide' }, 'Lets Cloudy send password reset links, share notifications and security notices to the email address in each user\'s profile. Leave the server empty to turn email off.'),
+    h('label', { class: 'field' }, h('span', {}, 'SMTP server'), f.host),
+    h('label', { class: 'field' }, h('span', {}, 'Port'), f.port),
+    h('label', { class: 'field' }, h('span', {}, 'Encryption'), f.security),
+    h('label', { class: 'field' }, h('span', {}, 'Username'), f.user),
+    h('label', { class: 'field' }, h('span', {}, 'Password'), f.password),
+    h('label', { class: 'field' }, h('span', {}, 'From name'), f.fromName),
+    h('label', { class: 'field wide' }, h('span', {}, 'From email'), f.fromEmail),
+    h('div', { class: 'wide row end' }, status,
+      h('button', { class: 'btn', type: 'button', onclick: async () => {
+        const to = await promptDialog('Send test email', 'Send to', ctx.me.email || '', 'Send');
+        if (!to) return;
+        try {
+          await save();
+          status.textContent = 'Sending…';
+          const r = await post('/api/admin/mail/test', { to });
+          status.textContent = `Test email sent to ${r.to}.`;
+          toast('Test email sent');
+        } catch (err) { status.textContent = ''; showError(err); }
+      } }, 'Save and send test'),
+      h('button', { class: 'btn primary', type: 'submit' }, 'Save')),
+  );
 }

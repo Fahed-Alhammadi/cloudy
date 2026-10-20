@@ -70,16 +70,18 @@ function scheduleRefresh(delay) {
 // Only one WebAuthn request may be pending; the autofill one is aborted before any other login.
 let passkeyAbort = null;
 
-function renderLogin(message) {
+function renderLogin(message, notice = false) {
   passkeyAbort?.abort();
   passkeyAbort = null;
+  if (/^#\/(forgot|reset\/)/.test(location.hash)) history.replaceState(null, '', location.pathname);
   const user = h('input', { type: 'text', name: 'username', autocomplete: 'username webauthn', required: true, autofocus: true, 'aria-label': 'Username' });
   const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
   // Second step for accounts with two-factor authentication; shown when the server asks for it.
   const code = h('input', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', 'aria-label': 'Authentication code', placeholder: '123 456' });
   const codeField = h('label', { class: 'field', hidden: true }, h('span', {}, 'Authentication code'), code,
     h('small', { class: 'muted' }, 'From your authenticator app, or one of your recovery codes.'));
-  const error = h('p', { class: 'error', role: 'alert' }, message || '');
+  const error = h('p', { class: notice ? 'notice' : 'error', role: 'alert' }, message || '');
+  const forgot = h('a', { class: 'forgot-link', href: '#/forgot', hidden: true, onclick: (e) => { e.preventDefault(); renderForgot(user.value.trim()); } }, 'Forgot password?');
   const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Log in');
   const passkeyLogin = async (conditional) => {
     passkeyAbort?.abort();
@@ -130,13 +132,72 @@ function renderLogin(message) {
       h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'),
       h('label', { class: 'field' }, h('span', {}, 'Username'), user),
       h('label', { class: 'field' }, h('span', {}, 'Password'), pass),
+      forgot,
       codeField,
       error, btn,
       passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, 'or'),
       passkeyBtn,
       h('a', { class: 'android-link', href: '/download/android' }, icon('download'), 'Get the Android app'))));
+  get('/api/auth/options').then((o) => { forgot.hidden = !o.passwordReset; }, () => {});
   user.focus();
   passkeyAutofillAvailable().then((ok) => ok && !passkeyAbort && app.contains(user) && passkeyLogin(true));
+}
+
+// ---------------------------------------------------------------- password reset by email
+
+function authCard(...kids) {
+  passkeyAbort?.abort();
+  app.replaceChildren(h('main', { class: 'login' }, h('form', { class: 'login-card' }, h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'), ...kids)));
+  return app.querySelector('form');
+}
+
+function renderForgot(initial = '') {
+  const login = h('input', { type: 'text', autocomplete: 'username', required: true, value: initial, 'aria-label': 'Username or email' });
+  const msg = h('p', { class: 'error', role: 'alert' });
+  const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Send reset link');
+  const form = authCard(
+    h('p', {}, 'Enter your username or email. If your account has an email address, we will send you a link to choose a new password.'),
+    h('label', { class: 'field' }, h('span', {}, 'Username or email'), login),
+    msg, btn,
+    h('a', { href: '#', onclick: (e) => { e.preventDefault(); renderLogin(); } }, 'Back to login'));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    try {
+      await post('/api/auth/forgot', { login: login.value.trim() });
+      msg.className = 'notice';
+      msg.textContent = 'If an account matches, a reset link is on its way. Check your inbox (and spam folder).';
+    } catch (err) {
+      msg.className = 'error';
+      msg.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+  login.focus();
+}
+
+function renderReset(token) {
+  const pw1 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': 'New password' });
+  const pw2 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': 'Repeat new password' });
+  const msg = h('p', { class: 'error', role: 'alert' });
+  const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Set new password');
+  const form = authCard(
+    h('label', { class: 'field' }, h('span', {}, 'New password (8+ characters)'), pw1),
+    h('label', { class: 'field' }, h('span', {}, 'Repeat new password'), pw2),
+    msg, btn);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (pw1.value !== pw2.value) { msg.textContent = 'The passwords do not match.'; return; }
+    btn.disabled = true;
+    try {
+      await post('/api/auth/reset', { token, password: pw1.value });
+      renderLogin('Your password was changed. Log in with the new one.', true);
+    } catch (err) {
+      msg.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+  pw1.focus();
 }
 
 const NAV = [
@@ -211,6 +272,15 @@ async function route() {
 }
 
 window.addEventListener('hashchange', route);
-window.addEventListener('cloudy:unauthorized', () => { stopLiveUpdates(); ctx.me = null; renderLogin('Your session has expired. Please log in again.'); });
+// Only an existing session can expire; at startup "not logged in" is handled below.
+window.addEventListener('cloudy:unauthorized', () => {
+  if (!ctx.me) return;
+  stopLiveUpdates();
+  ctx.me = null;
+  renderLogin('Your session has expired. Please log in again.');
+});
 
-get('/api/me').then((me) => { ctx.me = me; return startSession(); }, () => renderLogin());
+const startHash = location.hash;
+const resetLink = /^#\/reset\/([\w-]+)$/.exec(startHash);
+if (resetLink) renderReset(resetLink[1]);
+else get('/api/me').then((me) => { ctx.me = me; return startSession(); }, () => (startHash === '#/forgot' ? renderForgot() : renderLogin()));

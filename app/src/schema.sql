@@ -232,3 +232,12 @@ BEGIN
 END $$;
 DROP TRIGGER IF EXISTS shares_notify ON shares;
 CREATE TRIGGER shares_notify AFTER INSERT OR UPDATE OR DELETE ON shares FOR EACH ROW EXECUTE FUNCTION cloudy_notify_share();
+
+-- Email: one-time password reset links (token stored as SHA-256) and per-user notification choice.
+CREATE TABLE IF NOT EXISTS password_resets (
+  token_hash text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_shares boolean NOT NULL DEFAULT true;

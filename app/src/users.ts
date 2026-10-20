@@ -66,6 +66,7 @@ export async function userJson(u: User) {
     isAdmin: u.is_admin,
     twoFactor: !!u.totp_enabled,
     passkeys: keys?.n ?? 0,
+    notifyShares: u.notify_shares !== false,
     disabled: u.disabled,
     quotaBytes: u.quota_bytes,
     used: await usage(u.id),

@@ -6,6 +6,7 @@ import type { User } from '../auth.ts';
 import { newToken, hashPassword, verifyPassword, sign, checkRate, recordFailure } from '../auth.ts';
 import * as F from '../files.ts';
 import { sendNodeFile, sendZip } from '../download.ts';
+import { notifyShare } from '../mail.ts';
 import { startUpload } from './files.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
@@ -91,6 +92,7 @@ export function registerShares(r: Router, authed: Wrap) {
       [node.id, user.id, type, shareWith, !!b.canEdit && (type !== 'link' || node.is_dir), token,
        type === 'link' ? pw : null, parseExpiry(b.expiresAt), String(b.label ?? '')],
     );
+    if (shareWith) await notifyShare(req, user, node.id, type, shareWith);
     json(res, shareJson(s!), 201);
   }));
 

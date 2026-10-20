@@ -178,3 +178,16 @@ PDF viewer, Android renders it with `PdfRenderer`. `GET /api/office` lists the p
   `/tmp` (not on a possibly-NFS `DATA_DIR`).
 - Previews are read-only. Editing is limited to text files (web viewer and Android), saved through
   `PUT /api/nodes/:id/content`, which keeps the previous content as a version.
+
+## 11. Email
+
+`mail.ts` sends through the SMTP server configured in *Administration → Email* (stored in `settings` key `smtp`;
+the password is never returned by the API) using `nodemailer`. Messages have a plain-text and a simple HTML part
+and are sent in the background — failures are logged, never shown to the user who triggered them.
+- **Password reset**: `POST /api/auth/forgot {login}` (username or email, case-insensitive) always answers 204 and
+  is rate-limited per IP (5/h) and per account (3/h). It stores the SHA-256 of a random token in
+  `password_resets` (60 min, one per user) and mails `<origin>/#/reset/<token>`. `POST /api/auth/reset
+  {token, password}` consumes the token, sets the password, deletes all sessions and sends a notice.
+  `GET /api/auth/options` tells the login page whether to offer it.
+- **Notifications**: new user/group shares (recipients with an email and `notify_shares`, not the sharer) and
+  password changes. Links use `PUBLIC_URL` or the origin of the request that caused the email.

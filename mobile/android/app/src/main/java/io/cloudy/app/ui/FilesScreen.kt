@@ -89,6 +89,12 @@ import io.cloudy.app.data.ApiException
 import io.cloudy.app.data.FileNode
 import io.cloudy.app.data.NodeListing
 import io.cloudy.app.data.Live
+import io.cloudy.app.data.ListCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
@@ -167,7 +173,8 @@ suspend fun openExternally(context: Context, node: FileNode) {
 fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<List<Uri>>) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var listing by remember { mutableStateOf<NodeListing?>(null) }
+    // Last known contents show at once; load() refreshes them.
+    var listing by remember { mutableStateOf(ListCache.folder(folderId)) }
     var offlineMode by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
@@ -181,13 +188,14 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
         try {
             val l = Services.api.node(folderId)
             listing = l
+            ListCache.putFolder(l)
             offlineMode = false
             error = null
-            if (Services.offline.cachedListing(folderId) != null) Services.offline.cacheListing(l)
+            withContext(Dispatchers.IO) { if (Services.offline.hasCachedListing(folderId)) Services.offline.cacheListing(l) }
         } catch (e: ApiException) {
             error = e.message
         } catch (e: IOException) {
-            val cached = Services.offline.cachedListing(folderId)
+            val cached = withContext(Dispatchers.IO) { Services.offline.cachedListing(folderId) }
             if (cached != null) { listing = cached; offlineMode = true } else error = "Offline: ${e.message}"
         }
     }
@@ -208,13 +216,14 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { startUpload(it) }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { startUpload(it) }
 
-    val title = listing?.let { l -> if (l.node.parentId == null) "Files" else l.node.name } ?: ""
+    val known = listing?.node ?: ListCache.node(folderId)
+    val title = known?.let { n -> if (n.parentId == null) "Files" else n.name } ?: ""
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    if (listing?.node?.parentId != null) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                    if (known?.parentId != null) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
                 },
                 actions = { IconButton(onClick = { nav.navigate("search") }) { Icon(Icons.Outlined.Search, "Search") } },
             )
@@ -507,7 +516,7 @@ fun PeopleDialog(node: FileNode, onDismiss: () -> Unit) {
 @Composable
 fun NodeListScreen(nav: NavController, kind: String) {
     val scope = rememberCoroutineScope()
-    var items by remember { mutableStateOf<List<FileNode>?>(null) }
+    var items by remember { mutableStateOf(ListCache.list(kind)) }
     var error by remember { mutableStateOf<String?>(null) }
     val me = Services.session.user.value
     val title = mapOf("recent" to "Recent", "favorites" to "Favorites", "shared-in" to "Shared with you", "shared-out" to "Shared by you", "offline" to "Available offline")[kind] ?: kind
@@ -522,10 +531,13 @@ fun NodeListScreen(nav: NavController, kind: String) {
                 "shared-out" -> Services.api.sharedByMe().also { list ->
                     outgoing = list.groupBy { it.nodeId }.mapValues { (_, s) -> s.joinToString { if (it.type == "link") "link" else it.shareWith ?: "" } }
                 }.mapNotNull { it.node }.distinctBy { it.id }
-                "offline" -> Services.offline.pinned.mapNotNull { id -> runCatching { Services.api.node(id).node }.getOrNull() }
+                "offline" -> coroutineScope {
+                    Services.offline.pinned.map { id -> async { runCatching { Services.api.node(id).node }.getOrNull() } }.awaitAll().filterNotNull()
+                }
                 else -> emptyList()
-            }
-        } catch (e: Exception) { error = e.message }
+            }.also { ListCache.putList(kind, it) }
+            error = null
+        } catch (e: Exception) { if (items == null) error = e.message }
     }
     LaunchedEffect(kind) { load() }
     LaunchedEffect(kind) {
@@ -537,7 +549,7 @@ fun NodeListScreen(nav: NavController, kind: String) {
         Box(Modifier.padding(pad)) {
             val list = items
             when {
-                error != null -> EmptyState(Icons.Outlined.CloudOff, error!!)
+                error != null && list == null -> EmptyState(Icons.Outlined.CloudOff, error!!)
                 list == null -> Loading()
                 list.isEmpty() -> EmptyState(Icons.Outlined.FolderOpen, "Nothing here yet")
                 else -> NodeList(list, nav, canModify = { it.owner == me?.id }, reload = { scope.launch { load() } }, scope = scope, subtitle = { n ->
