@@ -79,7 +79,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - 2026-10-20: Live updates (DB triggers → LISTEN → SSE `/api/events`; web + Android reload changed views) and built-in
   Collabora Online office editor (WOPI host + proxy in `office.ts`, web dialog, Android WebView, New document/
   spreadsheet/presentation). Image moved Alpine → Debian 13 (glibc for Collabora); existing PG17 data dirs start unchanged.
-  New env `OFFICE`, `OFFICE_HOME_MODE`, `COLLABORA_URL`. Server 1.5.0, Android 1.5.0 (code 4; v1.4.0 was the passkey release).
+  New env `OFFICE`, `OFFICE_HOME_MODE`, `COLLABORA_URL`. Server 1.5.1, Android 1.5.1 (code 4). Tags v1.4.0/v1.5.0 point at the passkey-only commit.
 - 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
   password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
 - 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,
