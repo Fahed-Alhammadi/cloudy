@@ -37,7 +37,7 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
   chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`. `/download/android` (server.ts)
   redirects to the latest GitHub release's `Cloudy.apk` (`APP_REPO`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ListCache = in-memory listings, AppUpdater = GitHub releases, Live = SSE + Office),
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, AppUpdater = GitHub releases, Live = SSE + Office),
   `work/Workers.kt` (photo backup, offline sync, daily update check), `ui/` screens (PreviewScreen edits text files).
   `build-apk.sh` → `mobile/dist/`.
 
@@ -87,6 +87,9 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: 1.9.0 — Android *More → Connection check* (API, HTTPS, forwarded headers, WebDAV/CalDAV PROPFIND,
+  .well-known, 8 MB upload, live updates; shareable report, DAV URLs to copy) + `GET /api/diagnostics`.
+  Server/Android 1.9.0 (code 8).
 - 2026-10-20: Added `docs/privacy-policy.md` (Google Play privacy policy; contact alhammadi.team@gmail.com).
 - 2026-10-20: 1.8.0 — Contacts import from .vcf (vCard 2.1–4.0, QP/charsets) and .csv (Google, Outlook) with
   duplicate detection, and .vcf export; web (menu, Import button, drag & drop) and Android (picker, share sheet).

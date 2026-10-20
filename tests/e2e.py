@@ -356,6 +356,20 @@ check('Android download redirects to GitHub releases', s == 302 and loc.startswi
 s, _ = admin.req('GET', '/api/admin/app/android')
 check('server-side APK publishing removed', s == 404)
 
+print('== connection diagnostics')
+s, dg = admin.req('GET', '/api/diagnostics')
+check('diagnostics describe the request', s == 200 and dg['user'] == ADMIN and dg['davFiles'].endswith(f'/dav/files/{ADMIN}/')
+      and dg['davRoot'].endswith('/dav/') and isinstance(dg['secure'], bool) and dg['clientIp'], dg)
+s, _ = Client().req('GET', '/api/diagnostics')
+check('diagnostics need login', s == 401)
+noredir2 = urllib.request.build_opener(type('NoRedirect2', (urllib.request.HTTPRedirectHandler,), {'redirect_request': lambda *a: None}))
+for kind in ('caldav', 'carddav'):
+    try:
+        r = noredir2.open(BASE + f'/.well-known/{kind}'); s, loc = r.status, r.headers.get('Location')
+    except urllib.error.HTTPError as e:
+        s, loc = e.code, e.headers.get('Location')
+    check(f'/.well-known/{kind} redirects to /dav/', s in (301, 302) and loc.rstrip('/').endswith('/dav'), (s, loc))
+
 print('== email (SMTP)')
 mails = []
 class FakeSMTP(socketserver.StreamRequestHandler):

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
@@ -137,6 +138,7 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
             composable("contacts") { ContactsScreen() }
             composable("more") { MoreScreen(nav) }
             composable("backup") { BackupScreen(nav) }
+            composable("connection") { ConnectionScreen(nav) }
         }
     }
 }
@@ -177,6 +179,7 @@ fun MoreScreen(nav: NavController) {
             Entry("Deleted files", Icons.Outlined.Delete, "trash")
             HorizontalDivider()
             Entry("Photo backup", Icons.Outlined.PhotoCamera, "backup")
+            Entry("Connection check", Icons.Outlined.NetworkCheck, "connection")
             ListItem(
                 modifier = Modifier.clickable { confirmLogout = true },
                 leadingContent = { Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error) },

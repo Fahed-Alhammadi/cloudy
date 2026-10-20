@@ -204,3 +204,11 @@ detects the format and encoding (UTF-8, UTF-16 with BOM, else Windows-1252).
 - **Duplicates**: a card whose UID exists replaces that contact; otherwise a contact with the same name and a shared
   email or phone (last 9 digits) is skipped. The response counts `imported`, `updated`, `duplicates`, `skipped`.
 - `GET /api/addressbooks/:id/export` returns every card as one `text/vcard` file.
+
+## 13. Connection check (Android)
+
+*More → Connection check* (`ConnectionCheck.kt`) runs, from the phone, the requests other clients depend on:
+`/status`, HTTPS, `GET /api/diagnostics` (what the server sees: `secure`, `origin`, `clientIp`, `trustProxy`, DAV
+URLs), `PROPFIND` Depth 0 with Basic auth on `/dav/files/<user>/` and `/dav/`, `/.well-known/caldav|carddav`
+without following redirects, one full upload chunk of a throwaway upload session that is then deleted (skipped on
+metered networks), and the first line of `/api/events` within 8 s. Each result carries a proxy-specific fix.

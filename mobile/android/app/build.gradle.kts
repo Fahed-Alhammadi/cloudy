@@ -21,8 +21,8 @@ android {
         applicationId = "io.cloudy.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.8.0"
+        versionCode = 8
+        versionName = "1.9.0"
         // GitHub repository whose latest release carries the APK the app updates itself from.
         buildConfigField("String", "UPDATE_REPO", "\"${project.findProperty("updateRepo") ?: "Fahed-Alhammadi/cloudy"}\"")
     }
