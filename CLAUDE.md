@@ -12,7 +12,8 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
-- `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
+- `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/privacy-policy.md` — app privacy policy
+  for Google Play (keep it in sync with what the Android app accesses). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
 - `app/src/server.ts` — entry: HTTP dispatch, CSRF guard, static app serving, hourly jobs (trash/upload/session expiry).
 - `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json).
 - `app/src/schema.sql` — whole DB schema, applied idempotently at every start (no migration tool).
@@ -86,6 +87,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-20: Added `docs/privacy-policy.md` (Google Play privacy policy; contact alhammadi.team@gmail.com).
 - 2026-10-20: 1.8.0 — Contacts import from .vcf (vCard 2.1–4.0, QP/charsets) and .csv (Google, Outlook) with
   duplicate detection, and .vcf export; web (menu, Import button, drag & drop) and Android (picker, share sheet).
   Server/Android 1.8.0 (code 7).
