@@ -7,6 +7,18 @@
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
 database inside), a browser app, and a native Android app that updates itself from GitHub releases.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/files.png" alt="Files" width="200">
+  <img src="docs/screenshots/sharing.png" alt="Sharing" width="200">
+  <img src="docs/screenshots/preview.png" alt="Text editor" width="200">
+  <br>
+  <img src="docs/screenshots/photos.png" alt="Photo backup" width="200">
+  <img src="docs/screenshots/calendar.png" alt="Calendar" width="200">
+  <img src="docs/screenshots/contacts.png" alt="Contacts" width="200">
+</p>
+
 ## Features
 
 - **Files:** drag-and-drop upload (whole folders too), resumable uploads, previews for images, video, audio and

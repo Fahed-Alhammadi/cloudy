@@ -89,6 +89,9 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: Entrypoint aliases missing UTF-8 locales from old Alpine data dirs (e.g. `en_US.utf8`) to `C.utf8` —
+  they stopped PostgreSQL starting on the Debian image; musl collation = code point, so indexes stay valid.
+  Store screenshots in `docs/screenshots/` (emulator, demo user).
 - 2026-10-21: `docs/index.html` app page for GitHub Pages / Google Play listing (features, screenshot gallery, privacy-policy link).
 - 2026-10-20: 1.9.1 — Real client IP behind several proxies (rightmost public address in X-Forwarded-For; all-local →
   leftmost), `/api/diagnostics` shows the raw chain, Connection check tells "TRUST_PROXY off" from "IP lost before the proxy".

@@ -66,6 +66,14 @@ if [ -z "${DATABASE_URL:-}" ]; then
     $RUN "$PG_BIN/initdb" -D "$DB_DIR" -U cloudy --auth=trust --encoding=UTF8 --locale=C.UTF-8 >/dev/null
   fi
 
+  # Data dirs from the old Alpine images use locales like en_US.utf8, which this image lacks. musl sorts every
+  # locale by code point, exactly like glibc's C.utf8, so alias the missing names to it (indexes stay valid).
+  for loc in $(sed -n "s/^lc_[a-z]* = '\([^']*\)'.*/\1/p" "$DB_DIR/postgresql.conf" 2>/dev/null | sort -u); do
+    case "$loc" in *.[uU][tT][fF]8 | *.[uU][tT][fF]-8) ;; *) continue ;; esac
+    alias="/usr/lib/locale/${loc%%.*}.utf8"
+    [ -e "$alias" ] || ln -s C.utf8 "$alias" 2>/dev/null || true
+  done
+
   # Unix socket only: the database is not reachable from outside the container.
   $RUN "$PG_BIN/postgres" -D "$DB_DIR" -c listen_addresses='' -c unix_socket_directories="$SOCK_DIR" \
     -c hba_file=/etc/cloudy/pg_hba.conf -c jit=off &
