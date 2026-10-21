@@ -5,10 +5,15 @@ import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -111,5 +116,18 @@ fun UpdatePrompt() {
                 UpdateState.visible = false
             }) { Text("Later") }
         },
+    )
+}
+
+/** "Check for updates" row on the More screen. */
+@Composable
+fun UpdateEntry() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    ListItem(
+        modifier = Modifier.clickable { scope.launch { UpdateState.check(context, manual = true) } },
+        leadingContent = { Icon(Icons.Outlined.SystemUpdate, null) },
+        headlineContent = { Text("Check for updates") },
+        supportingContent = { Text("Version ${AppUpdater.currentVersionName}") },
     )
 }

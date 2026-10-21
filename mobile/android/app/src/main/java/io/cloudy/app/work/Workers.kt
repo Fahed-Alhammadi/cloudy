@@ -17,14 +17,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import io.cloudy.app.MainActivity
 import io.cloudy.app.Services
-import io.cloudy.app.data.AppUpdater
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.Intent
-import androidx.core.app.NotificationCompat
 import java.util.concurrent.TimeUnit
 
 /** Photo backup settings, stored in app preferences. */
@@ -67,9 +60,7 @@ object Jobs {
         } else {
             wm.cancelUniqueWork("backup")
         }
-        wm.enqueueUniquePeriodicWork("app-update", ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<UpdateWorker>(1, TimeUnit.DAYS)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build())
+        scheduleUpdateCheck(wm)
         wm.enqueueUniquePeriodicWork("offline", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<OfflineWorker>(1, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build()).build())
@@ -87,32 +78,6 @@ object Jobs {
 
     fun hasMediaPermission(context: Context) =
         mediaPermissions().all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-}
-
-/** Daily check for a newer app release; posts a notification once per version. */
-class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        if (!Services.session.isLoggedIn) return Result.success()
-        val release = runCatching { AppUpdater.check() }.getOrElse { return Result.retry() } ?: return Result.success()
-        val ctx = applicationContext
-        val prefs = ctx.getSharedPreferences("updates", Context.MODE_PRIVATE)
-        if (prefs.getString("notifiedVersion", null) == release.versionName) return Result.success()
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return Result.success()
-        val nm = ctx.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) nm.createNotificationChannel(NotificationChannel("updates", "App updates", NotificationManager.IMPORTANCE_DEFAULT))
-        val open = PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        nm.notify(1001, NotificationCompat.Builder(ctx, "updates")
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Cloudy ${release.versionName} is available")
-            .setContentText(release.notes.ifBlank { "Tap to update" })
-            .setContentIntent(open)
-            .setAutoCancel(true)
-            .build())
-        prefs.edit().putString("notifiedVersion", release.versionName).apply()
-        return Result.success()
-    }
 }
 
 class OfflineWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {

@@ -32,7 +32,7 @@ Your files, photos, calendars, contacts and account live on the Cloudy server yo
 | **Photos and videos** (permission: *Photos and videos*) | Only if you turn on **Photo backup**. The app then reads photos and videos from your gallery and uploads new ones to your server in the background. You can also pick individual photos or videos to upload. | Your server only |
 | **Calendar events** | Events you view, create, edit or delete in the app. | Your server only |
 | **Contacts** | Contacts you view, create, edit or delete in the app, and contacts in a file (.vcf or .csv) that **you** choose to import. The app does **not** read your phone's address book and does not request the Contacts permission. Exported contacts go only where you choose in the share sheet. | Your server only |
-| **Notifications** (permission: *Notifications*) | To tell you when a new version of the app is available. | Shown on your phone only |
+| **Notifications** (permission: *Notifications*, GitHub version only) | To tell you when a new version of the app is available. The Google Play version does not request this permission. | Shown on your phone only |
 | **Network state** | To run photo backup and offline sync only on the network you allow (for example Wi-Fi only). | Stays on your phone |
 
 The app does **not** access your location, camera, microphone, phone calls, SMS or phone contacts, and it does not collect advertising IDs or device identifiers.

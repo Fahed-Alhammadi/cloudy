@@ -176,6 +176,12 @@ server. Bump `version` in `app/package.json` and `versionCode`/`versionName` in
 New users install from `https://<your-server>/download/android` (linked on the login page), which points to the
 latest release. See [mobile/README.md](mobile/README.md).
 
+**Google Play.** The app has two builds: `github` (the self-updating APK above) and `play` (an `.aab` without the
+updater, which Play forbids — Play installs the updates). `mobile/android/build-apk.sh` builds both into
+`mobile/dist/`; the release workflow keeps the `.aab` as a workflow artifact and, once the
+`PLAY_SERVICE_ACCOUNT_JSON` secret is set, uploads it to the Play closed-testing track. The two builds are
+signed with different keys (Play re-signs its copy), so switching between them means uninstalling first.
+
 ## Two-factor authentication
 
 Each user can turn it on under *Settings → Two-factor authentication*:
@@ -254,7 +260,7 @@ Set these in `docker-compose.yml` (the value after `:-`) or in a `.env` file nex
 |---|---|
 | Type-check the server | `cd app && npm install && npm run typecheck` |
 | End-to-end tests (stack running) | `python3 tests/e2e.py http://localhost:8080 admin '<admin password>'` |
-| Android debug build | `cd mobile/android && ./gradlew assembleDebug` (JDK 17+, Android SDK 35) |
+| Android debug build | `cd mobile/android && ./gradlew assembleDebug` (JDK 17+, Android SDK 36) |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how Cloudy works inside.
 

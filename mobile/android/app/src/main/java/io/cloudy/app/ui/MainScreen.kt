@@ -34,7 +34,6 @@ import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -185,12 +184,7 @@ fun MoreScreen(nav: NavController) {
                 leadingContent = { Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error) },
                 headlineContent = { Text("Log out", color = MaterialTheme.colorScheme.error) },
             )
-            ListItem(
-                modifier = Modifier.clickable { scope.launch { UpdateState.check(context, manual = true) } },
-                leadingContent = { Icon(Icons.Outlined.SystemUpdate, null) },
-                headlineContent = { Text("Check for updates") },
-                supportingContent = { Text("Version ${io.cloudy.app.data.AppUpdater.currentVersionName}") },
-            )
+            UpdateEntry()
             Text("Offline storage: ${formatSize(Services.offline.usedBytes())}", Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }

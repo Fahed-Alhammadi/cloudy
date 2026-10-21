@@ -15,16 +15,26 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "io.cloudy.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.cloudy.app"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 9
-        versionName = "1.9.1"
-        // GitHub repository whose latest release carries the APK the app updates itself from.
-        buildConfigField("String", "UPDATE_REPO", "\"${project.findProperty("updateRepo") ?: "Fahed-Alhammadi/cloudy"}\"")
+        targetSdk = 36
+        versionCode = 10
+        versionName = "1.9.2"
+    }
+
+    // github: APK on GitHub releases that updates itself (src/github). play: AAB for Google Play, which forbids
+    // self-updates: no updater code (src/play stubs), no REQUEST_INSTALL_PACKAGES/POST_NOTIFICATIONS.
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+            // GitHub repository whose latest release carries the APK the app updates itself from.
+            buildConfigField("String", "UPDATE_REPO", "\"${project.findProperty("updateRepo") ?: "Fahed-Alhammadi/cloudy"}\"")
+        }
+        create("play") { dimension = "store" }
     }
 
     signingConfigs {

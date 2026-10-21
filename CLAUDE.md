@@ -39,14 +39,15 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
   redirects to the latest GitHub release's `Cloudy.apk` (`APP_REPO`).
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
 - `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, AppUpdater = GitHub releases, Live = SSE + Office),
-  `work/Workers.kt` (photo backup, offline sync, daily update check), `ui/` screens (PreviewScreen edits text files).
-  `build-apk.sh` → `mobile/dist/`.
+  `work/Workers.kt` (photo backup, offline sync), `ui/` screens (PreviewScreen edits text files). Flavors: `github`
+  (`src/github/`: AppUpdater, UpdateUi, UpdateWorker = GitHub self-update) and `play` (`src/play/`: no-op stubs, manifest
+  drops REQUEST_INSTALL_PACKAGES/POST_NOTIFICATIONS). `build-apk.sh` → `mobile/dist/` APK (github) + AAB (play).
 
 ## Tech Stack
 Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`, `nodemailer`; Postgres 17 (Debian);
 LibreOffice `*-nogui` packages (headless conversion to PDF).
 Web: vanilla JS modules, `<dialog>`, drag-and-drop, XHR chunk upload. Android: Kotlin 2.1, Compose (BOM 2024.12),
-OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35, minSdk 26.
+OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/targetSdk 36, minSdk 26.
 
 ## Commands
 - Run published image: `cp .env.example .env` (edit) → `docker compose up -d`; UI on `http://localhost:${APP_PORT:-8080}`
@@ -55,7 +56,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Logs: `docker logs -f cloudy` · Reset all data: `docker compose down -v`
 - Type-check: `cd app && npm install && npm run typecheck`
 - E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>`
-- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 35). Releases (image + APK on GitHub) come
+- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 36) → GitHub APK + Play AAB. Releases (image + APK on GitHub) come
   from a `vX.Y.Z` tag; CI refuses it unless `app/package.json` and `versionName` are X.Y.Z.
 
 ## Conventions
@@ -84,11 +85,15 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
   short NavHost transitions (`NAV_MS`); PDFs render one page at a time on demand.
 - Email is optional: `sendMail` is a no-op without SMTP settings; never reveal whether an account exists.
+- Play policy: nothing self-updating or APK-installing may live in `src/main`; put it in `src/github` with a stub in
+  `src/play`. Play App Signing: Google holds the app key, `cloudy-release.keystore` is the upload key.
 - Android updates: the app never sends Cloudy credentials to GitHub (`Api.plainHttp`); update prefs are keyed by
   versionName (`skippedVersion`, `notifiedVersion`).
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: 1.9.2 (code 10) — targetSdk/compileSdk 36 (Play requirement), AGP 8.9.1. Android `github`/`play` flavors; Play AAB without the self-updater; release workflow builds it, keeps it
+  as an artifact and uploads to Play's closed track when `PLAY_SERVICE_ACCOUNT_JSON` is set.
 - 2026-10-21: Entrypoint aliases missing UTF-8 locales from old Alpine data dirs (e.g. `en_US.utf8`) to `C.utf8` —
   they stopped PostgreSQL starting on the Debian image; musl collation = code point, so indexes stay valid.
   Store screenshots in `docs/screenshots/` (emulator, demo user).

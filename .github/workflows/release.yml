@@ -1,9 +1,14 @@
 # Push a tag like v1.2.0 to publish:
 #   - the server image ghcr.io/<owner>/cloudy:<version> and :latest (used by the auto-updater)
 #   - a signed Android APK attached to the GitHub release (if signing secrets are configured)
-# Repository secrets for signing (same key as your installed apps!):
+#   - the Google Play bundle (.aab): kept as a workflow artifact and, if PLAY_SERVICE_ACCOUNT_JSON is set,
+#     uploaded to the Play closed-testing track (promote to production by hand in Play Console)
+# Repository secrets for signing (same key as your installed apps; for Play it is the upload key):
 #   ANDROID_KEYSTORE_BASE64  base64 of mobile/android/cloudy-release.keystore
 #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# Optional: secret PLAY_SERVICE_ACCOUNT_JSON (Play Developer API service account key) and variables
+#   PLAY_TRACK (default "alpha" = closed testing) and PLAY_RELEASE_STATUS (default "completed";
+#   use "draft" while the app has never been published).
 name: Release
 
 on:
@@ -46,6 +51,8 @@ jobs:
 
   android:
     runs-on: ubuntu-24.04
+    env:
+      PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}   # secrets can't be tested in `if` directly
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -54,7 +61,7 @@ jobs:
           java-version: 21
       - uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools platforms;android-35 build-tools;35.0.0
+          packages: platform-tools platforms;android-36 build-tools;36.0.0
       - name: Signing key
         id: key
         env:
@@ -66,18 +73,36 @@ jobs:
           if [ -z "$KEYSTORE" ]; then echo "No signing secrets — skipping APK"; echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "$KEYSTORE" | base64 -d > mobile/android/cloudy-release.keystore
           printf 'storeFile=cloudy-release.keystore\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PW" "$ALIAS" "$KEY_PW" > mobile/android/keystore.properties
-      - name: Build signed APK
+      - name: Build signed APK and Play bundle
         if: steps.key.outputs.skip != 'true'
         working-directory: mobile/android
         run: |
           have=$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' app/build.gradle.kts)
           if [ "$have" != "${GITHUB_REF_NAME#v}" ]; then echo "::error::Tag $GITHUB_REF_NAME but versionName is $have"; exit 1; fi
-          ./gradlew --no-daemon assembleRelease -PupdateRepo="$GITHUB_REPOSITORY"
+          ./gradlew --no-daemon assembleGithubRelease bundlePlayRelease -PupdateRepo="$GITHUB_REPOSITORY"
           # Versioned name for the release page; stable name for /download/android (releases/latest/download/Cloudy.apk).
-          cp app/build/outputs/apk/release/app-release.apk "Cloudy-${GITHUB_REF_NAME#v}.apk"
-          cp app/build/outputs/apk/release/app-release.apk Cloudy.apk
+          cp app/build/outputs/apk/github/release/app-github-release.apk "Cloudy-${GITHUB_REF_NAME#v}.apk"
+          cp app/build/outputs/apk/github/release/app-github-release.apk Cloudy.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab "Cloudy-${GITHUB_REF_NAME#v}.aab"
       - uses: softprops/action-gh-release@v3
         if: steps.key.outputs.skip != 'true'
         with:
           files: mobile/android/Cloudy*.apk
           generate_release_notes: true
+      - uses: actions/upload-artifact@v5
+        if: steps.key.outputs.skip != 'true'
+        with:
+          name: play-bundle
+          path: |
+            mobile/android/Cloudy-*.aab
+            mobile/android/app/build/outputs/mapping/playRelease/mapping.txt
+      - name: Upload to Google Play
+        if: steps.key.outputs.skip != 'true' && env.PLAY_JSON != ''
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: io.cloudy.app
+          releaseFiles: mobile/android/Cloudy-*.aab
+          mappingFile: mobile/android/app/build/outputs/mapping/playRelease/mapping.txt
+          track: ${{ vars.PLAY_TRACK || 'alpha' }}
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
