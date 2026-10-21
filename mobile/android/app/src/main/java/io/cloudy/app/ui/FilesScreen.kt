@@ -10,6 +10,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +41,8 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.ManageAccounts
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -77,6 +81,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -86,12 +91,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import io.cloudy.app.Services
 import io.cloudy.app.data.ApiException
 import io.cloudy.app.data.FileNode
 import io.cloudy.app.data.NodeListing
 import io.cloudy.app.data.Live
 import io.cloudy.app.data.ListCache
+import io.cloudy.app.data.Share
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -407,6 +415,7 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
         if (isOwner) {
             Item("Share link", Icons.Outlined.Link) { dialog = "link" }
             Item("Share with people", Icons.Outlined.PersonAdd) { dialog = "people" }
+            if (node.shared) Item("Manage sharing", Icons.Outlined.ManageAccounts) { dialog = "shares" }
         }
         Item(if (node.favorite) "Remove from favorites" else "Add to favorites", if (node.favorite) Icons.Outlined.StarOutline else Icons.Outlined.Star) {
             act { Services.api.setFavorite(node.id, !node.favorite) }
@@ -428,6 +437,7 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
         "move" -> FolderPicker(node, onDismiss = onClose) { dest, copy -> act { if (copy) Services.api.copy(node.id, dest) else Services.api.move(node.id, dest) } }
         "link" -> LinkDialog(node, onClose)
         "people" -> PeopleDialog(node, onClose)
+        "shares" -> SharesDialog(node) { act {} }
     }
 }
 
@@ -492,6 +502,62 @@ fun LinkDialog(node: FileNode, onDismiss: () -> Unit) {
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+/** Lists a node's links and user/group shares, so they can be re-sent or stopped. */
+@Composable
+fun SharesDialog(node: FileNode, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var shares by remember { mutableStateOf<List<Share>?>(null) }
+    var stopping by remember { mutableStateOf<Share?>(null) }
+    suspend fun load() { shares = runCatching { Services.api.shares(node.id) }.getOrElse { toast(context, it.message ?: "Failed"); emptyList() } }
+    LaunchedEffect(node.id) { load() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sharing \"${node.name}\"", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        text = {
+            val list = shares
+            when {
+                list == null -> Loading()
+                list.isEmpty() -> Text("Not shared any more.")
+                else -> Column(Modifier.verticalScroll(rememberScrollState())) {
+                    list.forEach { sh ->
+                        val link = sh.type == "link"
+                        ListItem(
+                            leadingContent = { Icon(if (link) Icons.Outlined.Link else Icons.Outlined.PersonAdd, null) },
+                            headlineContent = { Text(if (link) "Public link" else (sh.shareWith ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = {
+                                Text(listOfNotNull(
+                                    if (sh.canEdit) "can edit" else if (link) null else "read only",
+                                    if (sh.hasPassword) "password" else null,
+                                    sh.expiresAt?.let { "expires ${formatDate(it)}" },
+                                ).joinToString(" · ").ifEmpty { "anyone with the link" })
+                            },
+                            trailingContent = {
+                                Row {
+                                    if (link && sh.url != null) IconButton(onClick = { shareText(context, Services.api.url(sh.url)) }) { Icon(Icons.Outlined.Share, "Send link") }
+                                    IconButton(onClick = { stopping = sh }) { Icon(Icons.Outlined.LinkOff, "Stop sharing", tint = MaterialTheme.colorScheme.error) }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+    stopping?.let { sh ->
+        ConfirmDialog("Stop sharing",
+            if (sh.type == "link") "The link stops working for everyone who has it." else "${sh.shareWith} loses access to \"${node.name}\".",
+            "Stop sharing", { stopping = null }) {
+            stopping = null
+            scope.launch {
+                runCatching { Services.api.deleteShare(sh.id) }.onFailure { toast(context, it.message ?: "Failed") }
+                load()
+            }
+        }
+    }
 }
 
 @Composable
@@ -592,15 +658,17 @@ fun NodeListScreen(nav: NavController, kind: String) {
 @Composable
 fun SearchScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
-    var q by remember { mutableStateOf("") }
+    var q by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<FileNode>>(emptyList()) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() } // open the keyboard right away
     LaunchedEffect(q) {
         kotlinx.coroutines.delay(250)
         results = if (q.isBlank()) emptyList() else runCatching { Services.api.search(q.trim()) }.getOrDefault(emptyList())
     }
     Scaffold(topBar = {
         TopAppBar(
-            title = { OutlinedTextField(q, { q = it }, placeholder = { Text("Search files") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(end = 8.dp)) },
+            title = { OutlinedTextField(q, { q = it }, placeholder = { Text("Search files") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(end = 8.dp).focusRequester(focus)) },
             navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
         )
     }) { pad ->

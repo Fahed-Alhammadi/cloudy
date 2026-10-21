@@ -1,5 +1,6 @@
 package io.cloudy.app.ui
 
+import androidx.activity.compose.BackHandler
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -101,6 +102,9 @@ fun PreviewScreen(nav: NavController, id: Long) {
     var error by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf(false) }
     var canEdit by remember { mutableStateOf(false) }
+    var dirty by remember { mutableStateOf(false) } // the text editor has unsaved changes
+    var confirmLeave by remember { mutableStateOf(false) }
+    BackHandler(enabled = dirty) { confirmLeave = true }
     LaunchedEffect(id) {
         runCatching { Services.api.node(id) }
             .onSuccess { node = it.node; canEdit = it.perm != "read" }
@@ -114,7 +118,7 @@ fun PreviewScreen(nav: NavController, id: Long) {
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(node?.name ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            navigationIcon = { IconButton(onClick = { if (dirty) confirmLeave = true else nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {
                 node?.let { IconButton(onClick = { sheet = true }) { Icon(Icons.Outlined.MoreVert, "Actions") } }
             },
@@ -130,7 +134,7 @@ fun PreviewScreen(nav: NavController, id: Long) {
                     "media" -> MediaPlayer(n)
                     "pdf" -> PdfView(n)
                     "office" -> PdfView(n, preview = true)
-                    "text" -> TextView(n, canEdit) { saved -> node = saved }
+                    "text" -> TextView(n, canEdit, onDirty = { dirty = it }) { saved -> node = saved }
                     else -> Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                         FileIcon(n, Modifier.padding(16.dp))
                         Text(n.name, style = MaterialTheme.typography.titleMedium)
@@ -143,6 +147,11 @@ fun PreviewScreen(nav: NavController, id: Long) {
                 }
             }
         }
+    }
+    if (confirmLeave) ConfirmDialog("Discard changes?", "Your edits to this file haven't been saved.", "Discard", { confirmLeave = false }) {
+        confirmLeave = false
+        dirty = false
+        nav.popBackStack()
     }
     if (sheet) node?.let { n ->
         NodeActions(n, nav, canModify = n.owner == Services.session.user.value?.id, reload = {}, scope = scope) { sheet = false }
@@ -257,7 +266,7 @@ private val draftSaver = Saver<String?, String>(save = { it?.takeIf { s -> s.len
 
 /** Text file; editable (with Save) when the user may change it. Saving keeps the old content as a version. */
 @Composable
-private fun TextView(n: FileNode, canEdit: Boolean, onSaved: (FileNode) -> Unit) {
+private fun TextView(n: FileNode, canEdit: Boolean, onDirty: (Boolean) -> Unit, onSaved: (FileNode) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loaded by remember { mutableStateOf<String?>(null) }
@@ -272,6 +281,8 @@ private fun TextView(n: FileNode, canEdit: Boolean, onSaved: (FileNode) -> Unit)
             .onFailure { failed = it.message }
     }
     val original = loaded
+    val changed = canEdit && original != null && text != original
+    LaunchedEffect(changed) { onDirty(changed) }
     when {
         failed != null -> EmptyState(Icons.Outlined.CloudOff, failed!!)
         original == null -> Loading()

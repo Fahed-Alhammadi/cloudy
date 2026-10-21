@@ -95,12 +95,14 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: 1.9.4 (code 12) — Android QA fixes: "Discard changes?" before leaving the text editor; search field focused
+  on open; *Manage sharing* (list/stop links and user shares, `SharesDialog`); event end follows the start, end-before-start
+  blocks Save and a rejected save keeps the editor open; contact birthday validated + date picker.
 - 2026-10-21: 1.9.3 (code 11) — Android: *Send to…* shares the file itself with other apps (WhatsApp, Telegram…; `sendToApp`
   in FilesScreen); "available offline" files open without network (`Offline.savedNode`, node details in state.json);
   editor drafts, event and contact forms survive rotation (`rememberSaveable`, `jsonSaver` in Common.kt); Connection
   check shows a local client IP on Wi-Fi as INFO (NAT loopback), not a warning.
-- 2026-10-21: Play Store graphics: `docs/app-icon-512.png` (launcher artwork) and `docs/play/` (1080×1920 captioned
-  screenshots + 1024×500 feature graphic, `python3 -I docs/play/render.py`; raw captures are 1080×2400, which Play rejects).
+- 2026-10-21: Play Store graphics: `docs/app-icon-512.png`, `docs/play/` (render.py; Play rejects the raw 1080×2400 captures).
 - 2026-10-21: 1.9.2 (code 10) — targetSdk/compileSdk 36 (Play requirement), AGP 8.9.1. Android `github`/`play` flavors; Play AAB without the self-updater; release workflow builds it, keeps it
   as an artifact and uploads to Play's closed track when `PLAY_SERVICE_ACCOUNT_JSON` is set.
 - 2026-10-21: Entrypoint aliases missing UTF-8 locales from old Alpine data dirs (e.g. `en_US.utf8`) to `C.utf8` —

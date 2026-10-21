@@ -70,6 +70,7 @@ import io.cloudy.app.data.EventInput
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -105,6 +106,7 @@ fun CalendarScreen() {
     var editing by rememberSaveable(stateSaver = editingSaver) { mutableStateOf<Pair<CalEvent?, LocalDate>?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
     var calendarsLoaded by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) } // ignore a second tap on Save while one is in flight
 
     val first = month.atDay(1)
     val gridStart = first.minusDays(((first.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7).toLong())
@@ -189,10 +191,12 @@ fun CalendarScreen() {
         if (calendars.isEmpty()) {
             toast(context, "No calendar available"); editing = null
         } else EventEditor(ev, day, calendars, onDismiss = { editing = null }) { op ->
-            scope.launch {
-                try { op(); reloadKey++ } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+            // The editor stays open until the server accepts the change, so a rejected save loses nothing.
+            if (!saving) scope.launch {
+                saving = true
+                try { op(); reloadKey++; editing = null } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+                saving = false
             }
-            editing = null
         }
     }
 }
@@ -232,6 +236,14 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
     fun pickTime(t: LocalTime, set: (LocalTime) -> Unit) =
         TimePickerDialog(context, { _, h, min -> set(LocalTime.of(h, min)) }, t.hour, t.minute, android.text.format.DateFormat.is24HourFormat(context)).show()
 
+    /** Moves the start and keeps the event's length, as calendar apps do. */
+    fun moveStart(d: LocalDate, t: LocalTime) {
+        val length = Duration.between(startDate.atTime(startTime), endDate.atTime(endTime)).coerceAtLeast(Duration.ZERO)
+        val end = d.atTime(t).plus(length)
+        startDate = d; startTime = t; endDate = end.toLocalDate(); endTime = end.toLocalTime()
+    }
+    val endBeforeStart = if (allDay) endDate < startDate else endDate.atTime(endTime) < startDate.atTime(startTime)
+
     fun input(): EventInput {
         val (s, e) = if (allDay) startDate.toString() to endDate.plusDays(1).toString()
         else startDate.atTime(startTime).atZone(zone).toInstant().toString() to endDate.atTime(endTime).atZone(zone).toInstant().toString()
@@ -247,14 +259,15 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
                 Row(verticalAlignment = Alignment.CenterVertically) { Text("All day", Modifier.weight(1f)); Switch(allDay, { allDay = it }) }
                 Text("Starts", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { pickDate(startDate) { startDate = it; if (endDate < it) endDate = it } }) { Text(startDate.toString()) }
-                    if (!allDay) OutlinedButton(onClick = { pickTime(startTime) { startTime = it } }) { Text(startTime.toString()) }
+                    OutlinedButton(onClick = { pickDate(startDate) { moveStart(it, startTime) } }) { Text(startDate.toString()) }
+                    if (!allDay) OutlinedButton(onClick = { pickTime(startTime) { moveStart(startDate, it) } }) { Text(startTime.toString()) }
                 }
                 Text("Ends", style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickDate(endDate) { endDate = it } }) { Text(endDate.toString()) }
                     if (!allDay) OutlinedButton(onClick = { pickTime(endTime) { endTime = it } }) { Text(endTime.toString()) }
                 }
+                if (endBeforeStart) Text("The end is before the start.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 Box {
                     OutlinedButton(onClick = { repeatMenu = true }) { Icon(Icons.Outlined.Repeat, null); Text("  " + repeats.first { it.first == rrule }.second) }
                     DropdownMenu(repeatMenu, { repeatMenu = false }) {
@@ -274,7 +287,7 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
             }
         },
         confirmButton = {
-            TextButton(enabled = summary.isNotBlank(), onClick = {
+            TextButton(enabled = summary.isNotBlank() && !endBeforeStart, onClick = {
                 val data = input()
                 onDone { if (ev == null) Services.api.createEvent(calendarId, data) else Services.api.updateEvent(ev.calendarId, ev.uri, data) }
             }) { Text("Save") }

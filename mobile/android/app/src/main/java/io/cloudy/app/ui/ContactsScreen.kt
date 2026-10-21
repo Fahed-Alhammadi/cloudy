@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.DatePickerDialog
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -68,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.cloudy.app.Services
+import java.time.LocalDate
 import io.cloudy.app.data.Contact
 import io.cloudy.app.data.DavCollection
 import kotlinx.coroutines.launch
@@ -241,6 +244,12 @@ private fun ContactEditor(c: Contact, bookId: Long, onClose: () -> Unit, onSave:
     var birthday by rememberSaveable { mutableStateOf(c.birthday.take(10)) }
     var note by rememberSaveable { mutableStateOf(c.note) }
     var confirmDelete by remember { mutableStateOf(false) }
+    // Empty, or a real date as YYYY-MM-DD (what vCard stores); anything else would be dropped by the server.
+    val birthdayOk = birthday.isBlank() || runCatching { LocalDate.parse(birthday.trim()) }.isSuccess
+    fun pickBirthday() {
+        val d = runCatching { LocalDate.parse(birthday.trim()) }.getOrDefault(LocalDate.of(1990, 1, 1))
+        DatePickerDialog(context, { _, y, m, dd -> birthday = LocalDate.of(y, m + 1, dd).toString() }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+    }
     val isNew = c.uri.isEmpty()
 
     Scaffold(topBar = {
@@ -249,7 +258,7 @@ private fun ContactEditor(c: Contact, bookId: Long, onClose: () -> Unit, onSave:
             navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
             actions = {
                 if (!isNew) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.Delete, "Delete") }
-                TextButton(enabled = (given + family + org).isNotBlank(), onClick = {
+                TextButton(enabled = (given + family + org).isNotBlank() && birthdayOk, onClick = {
                     val updated = c.copy(givenName = given.trim(), familyName = family.trim(), org = org.trim(), title = title.trim(),
                         emails = emails.lines().map { it.trim() }.filter { it.isNotEmpty() },
                         phones = phones.lines().map { it.trim() }.filter { it.isNotEmpty() },
@@ -272,7 +281,10 @@ private fun ContactEditor(c: Contact, bookId: Long, onClose: () -> Unit, onSave:
             OutlinedTextField(emails, { emails = it }, label = { Text("Emails (one per line)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(phones, { phones = it }, label = { Text("Phones (one per line)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(address, { address = it }, label = { Text("Address") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(birthday, { birthday = it }, label = { Text("Birthday (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(birthday, { birthday = it }, label = { Text("Birthday (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                isError = !birthdayOk,
+                supportingText = if (birthdayOk) null else { { Text("Use YYYY-MM-DD, for example 1990-05-14, or pick a date") } },
+                trailingIcon = { IconButton(onClick = ::pickBirthday) { Icon(Icons.Outlined.CalendarMonth, "Pick a date") } })
             OutlinedTextField(note, { note = it }, label = { Text("Notes") }, minLines = 3, modifier = Modifier.fillMaxWidth())
         }
     }
