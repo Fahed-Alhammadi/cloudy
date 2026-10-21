@@ -12,7 +12,8 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
-- `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/privacy-policy.md` — app privacy policy
+- `docs/index.html` — GitHub Pages site (app info for Google Play, screenshots in `docs/screenshots/`, links to
+  `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/privacy-policy.md` — app privacy policy
   for Google Play (keep it in sync with what the Android app accesses). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
 - `app/src/server.ts` — entry: HTTP dispatch, CSRF guard, static app serving, hourly jobs (trash/upload/session expiry).
 - `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json).
@@ -88,6 +89,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.7, compileSdk 35
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: `docs/index.html` app page for GitHub Pages / Google Play listing (features, screenshot gallery, privacy-policy link).
 - 2026-10-20: 1.9.1 — Real client IP behind several proxies (rightmost public address in X-Forwarded-For; all-local →
   leftmost), `/api/diagnostics` shows the raw chain, Connection check tells "TRUST_PROXY off" from "IP lost before the proxy".
 - 2026-10-20: 1.9.0 — Android *More → Connection check* (API, HTTPS, forwarded headers, WebDAV/CalDAV PROPFIND,

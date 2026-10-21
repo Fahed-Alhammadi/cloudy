@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloudy — your own cloud</title>
+  <meta name="description" content="Cloudy is a self-hosted cloud for files, sharing, calendars and contacts, with a native Android app.">
+  <link rel="icon" href="logo.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f7f9fc; --surface: #ffffff; --text: #1b2330; --muted: #5a6678;
+      --border: #e2e7ef; --accent: #2f7cf6; --accent-text: #ffffff;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #11151c; --surface: #1a2029; --text: #e7ecf3; --muted: #9aa6b8;
+        --border: #2a323e; --accent: #5b9bff; --accent-text: #0b1220;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    a { color: var(--accent); }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+    header { text-align: center; padding: 56px 0 32px; }
+    header img { width: 96px; height: 96px; }
+    h1 { font-size: 2.4rem; margin: 12px 0 4px; }
+    .tagline { color: var(--muted); font-size: 1.15rem; margin: 0 auto 24px; max-width: 560px; }
+    .buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-block; padding: 10px 20px; border-radius: 999px; text-decoration: none;
+      font-weight: 600; border: 1px solid var(--border); color: var(--text); background: var(--surface);
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+    section { padding: 32px 0; }
+    h2 { font-size: 1.5rem; margin: 0 0 16px; }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+    .card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); }
+    .shots { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+    .shots figure { margin: 0; flex: 0 0 220px; scroll-snap-align: start; text-align: center; }
+    .shots img {
+      width: 220px; height: auto; border-radius: 18px; border: 1px solid var(--border);
+      background: var(--surface); display: block;
+    }
+    .shots figcaption { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+    ul.plain { padding-left: 20px; margin: 0; }
+    footer {
+      border-top: 1px solid var(--border); margin-top: 32px; padding: 24px 0 40px;
+      color: var(--muted); font-size: .95rem; text-align: center;
+    }
+    footer nav { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="logo.svg" alt="Cloudy logo">
+      <h1>Cloudy</h1>
+      <p class="tagline">Your own cloud for files, sharing, calendars and contacts — on a server you run yourself.</p>
+      <div class="buttons">
+        <a class="btn primary" href="https://github.com/Fahed-Alhammadi/cloudy/releases/latest">Download for Android</a>
+        <a class="btn" href="https://github.com/Fahed-Alhammadi/cloudy">Source code</a>
+        <a class="btn" href="privacy-policy.html">Privacy policy</a>
+      </div>
+    </header>
+
+    <section>
+      <h2>About the app</h2>
+      <p>
+        Cloudy is the Android app for a self-hosted <strong>Cloudy server</strong>. You sign in to a server that you,
+        your company or someone you trust runs, and the app talks only to that server. The developer never receives
+        your files, photos, calendars or contacts. The app has no ads, no analytics and no tracking.
+      </p>
+      <p>
+        The server is free and open source and runs as a single Docker container. It also includes a web app and
+        WebDAV, CalDAV and CardDAV support for desktop and other mobile clients.
+      </p>
+    </section>
+
+    <section>
+      <h2>Screenshots</h2>
+      <div class="shots">
+        <figure><img src="screenshots/files.png" alt="File browser" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Files</figcaption></figure>
+        <figure><img src="screenshots/preview.png" alt="File preview" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Previews</figcaption></figure>
+        <figure><img src="screenshots/sharing.png" alt="Sharing a file" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Sharing</figcaption></figure>
+        <figure><img src="screenshots/photos.png" alt="Photo backup settings" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Photo backup</figcaption></figure>
+        <figure><img src="screenshots/calendar.png" alt="Calendar" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Calendar</figcaption></figure>
+        <figure><img src="screenshots/contacts.png" alt="Contacts" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Contacts</figcaption></figure>
+      </div>
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <div class="features">
+        <div class="card"><h3>Files</h3><p>Browse, upload, download, rename, move and delete files and folders. Favorites, recent files, search and trash.</p></div>
+        <div class="card"><h3>Previews</h3><p>Images, video, audio, PDF and read-only Word, Excel and PowerPoint documents. Text files can be edited.</p></div>
+        <div class="card"><h3>Sharing</h3><p>Share with users and groups, or create public links with a password and an expiry date.</p></div>
+        <div class="card"><h3>Offline files</h3><p>Mark files as available offline and open them without a connection.</p></div>
+        <div class="card"><h3>Photo backup</h3><p>Upload new photos and videos to your server automatically, on Wi-Fi only if you like.</p></div>
+        <div class="card"><h3>Calendar and contacts</h3><p>View and edit events and contacts. Import contacts from .vcf or .csv files and export them as .vcf.</p></div>
+        <div class="card"><h3>Live updates</h3><p>File lists refresh by themselves when something changes on another device.</p></div>
+        <div class="card"><h3>Security</h3><p>Two-factor authentication, per-device app passwords you can revoke, and HTTPS connections to your server.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Getting started</h2>
+      <ul class="plain">
+        <li>Run a Cloudy server (see the <a href="https://github.com/Fahed-Alhammadi/cloudy#install">install guide</a>), or get an account from someone who runs one.</li>
+        <li>Install the app and enter your server address, username and password.</li>
+        <li>Optional: turn on photo backup and choose folders to keep offline.</li>
+      </ul>
+    </section>
+
+    <footer>
+      <nav>
+        <a href="privacy-policy.html">Privacy policy</a>
+        <a href="https://github.com/Fahed-Alhammadi/cloudy">GitHub</a>
+        <a href="mailto:alhammadi.team@gmail.com">Contact</a>
+      </nav>
+      <div>© 2026 Fahed Alhammadi</div>
+    </footer>
+  </div>
+</body>
+</html>
