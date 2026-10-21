@@ -13,7 +13,8 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
 - `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
 - `docs/index.html` — GitHub Pages site (app info for Google Play, screenshots in `docs/screenshots/`, links to
-  `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/privacy-policy.md` — app privacy policy
+  `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/app-icon.svg` → `app-icon-512.png` — Google Play icon (launcher artwork, square, RGBA); `docs/play/` — Play
+  store screenshots + feature graphic (`render.py`, headless Chrome); `docs/privacy-policy.md` — app privacy policy
   for Google Play (keep it in sync with what the Android app accesses). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
 - `app/src/server.ts` — entry: HTTP dispatch, CSRF guard, static app serving, hourly jobs (trash/upload/session expiry).
 - `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json).
@@ -82,6 +83,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
   need their own trigger. Clients must tolerate duplicate/early events (they just reload).
 - Office files are view-only (PDF previews); only text files are editable (web + Android, `PUT /api/nodes/:id/content`).
   Image ~1.3 GB (LibreOffice + fonts); PostgreSQL's LLVM JIT is deleted (`jit=off`).
+- Android state: anything the user types must survive rotation/process death — `rememberSaveable` (+ `jsonSaver` for
+  models); restored editors wait for their data (calendars/address book) before showing.
 - Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
   short NavHost transitions (`NAV_MS`); PDFs render one page at a time on demand.
 - Email is optional: `sendMail` is a no-op without SMTP settings; never reveal whether an account exists.
@@ -92,6 +95,12 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: 1.9.3 (code 11) — Android: *Send to…* shares the file itself with other apps (WhatsApp, Telegram…; `sendToApp`
+  in FilesScreen); "available offline" files open without network (`Offline.savedNode`, node details in state.json);
+  editor drafts, event and contact forms survive rotation (`rememberSaveable`, `jsonSaver` in Common.kt); Connection
+  check shows a local client IP on Wi-Fi as INFO (NAT loopback), not a warning.
+- 2026-10-21: Play Store graphics: `docs/app-icon-512.png` (launcher artwork) and `docs/play/` (1080×1920 captioned
+  screenshots + 1024×500 feature graphic, `python3 -I docs/play/render.py`; raw captures are 1080×2400, which Play rejects).
 - 2026-10-21: 1.9.2 (code 10) — targetSdk/compileSdk 36 (Play requirement), AGP 8.9.1. Android `github`/`play` flavors; Play AAB without the self-updater; release workflow builds it, keeps it
   as an artifact and uploads to Play's closed track when `PLAY_SERVICE_ACCOUNT_JSON` is set.
 - 2026-10-21: Entrypoint aliases missing UTF-8 locales from old Alpine data dirs (e.g. `en_US.utf8`) to `C.utf8` —
@@ -125,14 +134,12 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - 2026-10-19: Two-factor authentication (TOTP + recovery codes, QR via `qrcode`) for web, Android and API; admin reset;
   DAV Basic accepts only app passwords when 2FA is on. Compose lists every setting under `environment:` with defaults
   (`.env` optional, overrides). Server 1.3.0, Android 1.3.0 (code 3).
-- 2026-10-19: `.env` optional in both compose files (`env_file: required: false`); README zero-config `docker run` quick start.
 - 2026-10-19: Removed server OTA (updater service, GitHub release check, `UPDATE_REPO`/`UPDATE_INTERVAL`); server updates are
   `docker compose pull`. OTA kept for the Android APK only.
 - 2026-10-19: Swapped compose files: root `docker-compose.yml` = published image (+ inline updater); `deploy/docker-compose.yml`
   = build from source. Removed `scripts/auto-update.sh`; CI builds via the deploy file.
 - 2026-10-19: Single all-in-one container (server + embedded PostgreSQL 17 via tini/entrypoint); `DB_PASSWORD` removed,
   `DB_PATH`/`DATABASE_URL` added, compose service renamed `cloudy` with `env_file: .env`. Existing volumes migrate as-is.
-- 2026-10-19: Added `deploy/docker-compose.yml` (image-only deployment); root compose now passes `UPDATE_REPO` to the app.
 - 2026-10-19: `.env` options `APP_USER` (run as uid:gid, default 1000:1000) and `DATA_PATH` (user-file storage, e.g. host NFS mount);
   startup writability check.
 - 2026-10-19: CI fix — setup-android v3 failed installing legacy `tools`; now v4 with explicit SDK packages.

@@ -57,6 +57,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -87,8 +88,8 @@ fun ContactsScreen() {
     var books by remember { mutableStateOf<List<DavCollection>>(emptyList()) }
     var book by remember { mutableStateOf<DavCollection?>(null) }
     var contacts by remember { mutableStateOf<List<Contact>?>(null) }
-    var query by remember { mutableStateOf("") }
-    var editing by remember { mutableStateOf<Contact?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var editing by rememberSaveable(stateSaver = jsonSaver<Contact>()) { mutableStateOf<Contact?>(null) }
     var bookMenu by remember { mutableStateOf(false) }
     var reloadKey by remember { mutableStateOf(0) }
     var moreMenu by remember { mutableStateOf(false) }
@@ -143,8 +144,10 @@ fun ContactsScreen() {
         book?.let { b -> contacts = runCatching { Services.api.contacts(b.id) }.getOrElse { toast(context, it.message ?: "Failed"); emptyList() } }
     }
 
-    editing?.let { c ->
-        ContactEditor(c, book!!.id, onClose = { editing = null }) { op ->
+    // After rotation the editor is restored before the address book has reloaded; open it once it has.
+    val editBook = book
+    editing?.takeIf { editBook != null }?.let { c ->
+        ContactEditor(c, editBook!!.id, onClose = { editing = null }) { op ->
             scope.launch {
                 try { op(); editing = null; reloadKey++ } catch (e: Exception) { toast(context, e.message ?: "Failed") }
             }
@@ -228,15 +231,15 @@ fun ContactsScreen() {
 private fun ContactEditor(c: Contact, bookId: Long, onClose: () -> Unit, onSave: (suspend () -> Unit) -> Unit) {
     val context = LocalContext.current
     BackHandler(onBack = onClose)
-    var given by remember { mutableStateOf(c.givenName) }
-    var family by remember { mutableStateOf(c.familyName) }
-    var org by remember { mutableStateOf(c.org) }
-    var title by remember { mutableStateOf(c.title) }
-    var emails by remember { mutableStateOf(c.emails.joinToString("\n")) }
-    var phones by remember { mutableStateOf(c.phones.joinToString("\n")) }
-    var address by remember { mutableStateOf(c.address) }
-    var birthday by remember { mutableStateOf(c.birthday.take(10)) }
-    var note by remember { mutableStateOf(c.note) }
+    var given by rememberSaveable { mutableStateOf(c.givenName) }
+    var family by rememberSaveable { mutableStateOf(c.familyName) }
+    var org by rememberSaveable { mutableStateOf(c.org) }
+    var title by rememberSaveable { mutableStateOf(c.title) }
+    var emails by rememberSaveable { mutableStateOf(c.emails.joinToString("\n")) }
+    var phones by rememberSaveable { mutableStateOf(c.phones.joinToString("\n")) }
+    var address by rememberSaveable { mutableStateOf(c.address) }
+    var birthday by rememberSaveable { mutableStateOf(c.birthday.take(10)) }
+    var note by rememberSaveable { mutableStateOf(c.note) }
     var confirmDelete by remember { mutableStateOf(false) }
     val isNew = c.uri.isEmpty()
 

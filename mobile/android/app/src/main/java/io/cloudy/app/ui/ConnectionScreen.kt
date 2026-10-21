@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -122,6 +123,7 @@ fun ConnectionScreen(nav: NavController) {
 private fun CheckRow(item: CheckItem) {
     val (icon, tint) = when (item.state) {
         CheckState.OK -> Icons.Outlined.CheckCircle to Color(0xFF2E9E6A)
+        CheckState.INFO -> Icons.Outlined.Info to MaterialTheme.colorScheme.primary
         CheckState.WARN -> Icons.Outlined.Warning to Color(0xFFD08A00)
         CheckState.FAIL -> Icons.Outlined.Error to MaterialTheme.colorScheme.error
         CheckState.SKIPPED -> Icons.Outlined.RemoveCircleOutline to MaterialTheme.colorScheme.outline

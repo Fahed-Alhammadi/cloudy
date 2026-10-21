@@ -30,7 +30,7 @@ database inside), a browser app, and a native Android app that updates itself fr
   Calendar/Contacts and others.
 - **WebDAV:** mount your files in Finder, Windows Explorer, rclone or Cyberduck.
 - **Android app:**
-  - browse files, preview them and share links;
+  - browse files, preview them, share links, or send a file straight to WhatsApp, Telegram, email and other apps;
   - keep files available offline;
   - back up photos automatically;
   - calendar and contacts;

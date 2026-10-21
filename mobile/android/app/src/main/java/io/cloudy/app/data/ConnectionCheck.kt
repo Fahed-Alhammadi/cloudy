@@ -2,6 +2,7 @@ package io.cloudy.app.data
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import io.cloudy.app.Services
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,7 +38,7 @@ data class Diagnostics(
     val davRoot: String = "",
 )
 
-enum class CheckState { RUNNING, OK, WARN, FAIL, SKIPPED }
+enum class CheckState { RUNNING, OK, INFO, WARN, FAIL, SKIPPED }
 
 data class CheckItem(val title: String, val state: CheckState = CheckState.RUNNING, val detail: String = "", val fix: String = "")
 
@@ -61,6 +62,13 @@ class ConnectionCheck(private val context: Context) {
 
     private val propfindBody = """<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"""
         .toRequestBody("application/xml; charset=utf-8".toMediaType())
+
+    /** Wi-Fi or Ethernet (not mobile data): the phone may share a network with the server. */
+    private fun onLocalNetwork(): Boolean {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
 
     /** Runs every check in order, reporting each result as soon as it is known. */
     suspend fun run(report: (List<CheckItem>) -> Unit) = withContext(Dispatchers.IO) {
@@ -115,6 +123,7 @@ class ConnectionCheck(private val context: Context) {
         step("Proxy forwards the right headers") {
             if (d == null) return@step CheckItem("", CheckState.SKIPPED, "Needs the signed-in API")
             val problems = mutableListOf<Pair<String, String>>()
+            var note: Pair<String, String>? = null
             val https = base.startsWith("https://")
             if (https && !d.secure) problems += "The server thinks this connection is plain HTTP" to
                 "Set TRUST_PROXY=true in .env and have the proxy send X-Forwarded-Proto (nginx: proxy_set_header X-Forwarded-Proto \$scheme)."
@@ -124,16 +133,22 @@ class ConnectionCheck(private val context: Context) {
                 "Have the proxy keep the Host header (nginx: proxy_set_header Host \$host) or set PUBLIC_URL=$base in .env. Email links and passkeys use this address."
             if (!isPrivateHost(URI(base).host ?: "") && isPrivateIp(d.clientIp)) {
                 val chain = "X-Forwarded-For: ${d.forwardedFor.ifBlank { "(none)" }}; connection from ${d.remoteAddress}"
-                problems += if (!d.trustProxy) {
-                    "Every visitor looks like ${d.clientIp}: the running server has TRUST_PROXY off ($chain)" to
+                when {
+                    !d.trustProxy -> problems += "Every visitor looks like ${d.clientIp}: the running server has TRUST_PROXY off ($chain)" to
                         "Put TRUST_PROXY=true in the .env next to docker-compose.yml and recreate the container with docker compose up -d (check with: docker exec cloudy printenv TRUST_PROXY). Otherwise one person's failed logins lock out everyone."
-                } else {
-                    "Every visitor looks like ${d.clientIp}: your phone's public address never reached the proxy ($chain)" to
-                        "The address is replaced before the reverse proxy — by the router's port forwarding (source NAT) or Docker's userland proxy. Forward the port without source NAT, or run the proxy with host networking. Check on mobile data: on home Wi-Fi a local address is normal."
+                    // On the server's own Wi-Fi/LAN the router loops the request back (NAT loopback), so a local address is expected.
+                    onLocalNetwork() -> note = "Your IP arrives as ${d.clientIp}: normal on home Wi-Fi ($chain)" to
+                        "On the same network as the server, the router sends the request straight back inside, so the proxy sees a local address. Run the check again on mobile data to test the reverse proxy itself."
+                    else -> problems += "Every visitor looks like ${d.clientIp}: your phone's public address never reached the proxy ($chain)" to
+                        "The address is replaced before the reverse proxy — by the router's port forwarding (source NAT) or Docker's userland proxy. Forward the port without source NAT, or run the proxy with host networking."
                 }
             }
-            if (problems.isEmpty()) CheckItem("", CheckState.OK, "HTTPS, address ${d.origin} and your IP ${d.clientIp} arrive correctly")
-            else CheckItem("", CheckState.WARN, problems.joinToString("\n") { it.first }, problems.joinToString("\n\n") { it.second })
+            val n = note
+            when {
+                problems.isNotEmpty() -> CheckItem("", CheckState.WARN, problems.joinToString("\n") { it.first }, problems.joinToString("\n\n") { it.second })
+                n != null -> CheckItem("", CheckState.INFO, n.first, n.second)
+                else -> CheckItem("", CheckState.OK, "${if (https) "HTTPS, a" else "A"}ddress ${d.origin} and your IP ${d.clientIp} arrive correctly")
+            }
         }
 
         val user = d?.user ?: Services.session.user.value?.id ?: ""

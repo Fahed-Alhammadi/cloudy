@@ -49,6 +49,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -96,12 +98,13 @@ fun parseColor(hex: String): Color = runCatching { Color(android.graphics.Color.
 fun CalendarScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var month by remember { mutableStateOf(YearMonth.now()) }
-    var selected by remember { mutableStateOf(LocalDate.now()) }
+    var month by rememberSaveable { mutableStateOf(YearMonth.now()) }
+    var selected by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var calendars by remember { mutableStateOf<List<DavCollection>>(emptyList()) }
     var events by remember { mutableStateOf<List<CalEvent>>(emptyList()) }
-    var editing by remember { mutableStateOf<Pair<CalEvent?, LocalDate>?>(null) }
+    var editing by rememberSaveable(stateSaver = editingSaver) { mutableStateOf<Pair<CalEvent?, LocalDate>?>(null) }
     var reloadKey by remember { mutableStateOf(0) }
+    var calendarsLoaded by remember { mutableStateOf(false) }
 
     val first = month.atDay(1)
     val gridStart = first.minusDays(((first.dayOfWeek.value - DayOfWeek.MONDAY.value + 7) % 7).toLong())
@@ -112,6 +115,7 @@ fun CalendarScreen() {
             val e = gridStart.plusDays(42).atStartOfDay(zone).toInstant().toString()
             events = calendars.flatMap { c -> runCatching { Services.api.events(c.id, s, e) }.getOrDefault(emptyList()) }
         } catch (e: Exception) { toast(context, e.message ?: "Failed to load calendar") }
+        calendarsLoaded = true
     }
     val colorOf = calendars.associate { it.id to parseColor(it.color) }
 
@@ -180,7 +184,8 @@ fun CalendarScreen() {
             }
         }
     }
-    editing?.let { (ev, day) ->
+    // A restored editor (after rotation) waits until the calendars have loaded again.
+    editing?.takeIf { calendarsLoaded }?.let { (ev, day) ->
         if (calendars.isEmpty()) {
             toast(context, "No calendar available"); editing = null
         } else EventEditor(ev, day, calendars, onDismiss = { editing = null }) { op ->
@@ -192,22 +197,31 @@ fun CalendarScreen() {
     }
 }
 
+/** The open editor (event, or null for a new one, and the day it was opened on) kept across rotation. */
+private val editingSaver = Saver<Pair<CalEvent?, LocalDate>?, String>(
+    save = { it?.let { (ev, day) -> "$day|" + (ev?.let { e -> saveJson.encodeToString(CalEvent.serializer(), e) } ?: "") } },
+    restore = { s ->
+        val (day, ev) = s.split("|", limit = 2)
+        (if (ev.isEmpty()) null else saveJson.decodeFromString(CalEvent.serializer(), ev)) to LocalDate.parse(day)
+    },
+)
+
 @Composable
 private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollection>, onDismiss: () -> Unit, onDone: (suspend () -> Unit) -> Unit) {
     val context = LocalContext.current
-    var summary by remember { mutableStateOf(ev?.summary ?: "") }
-    var allDay by remember { mutableStateOf(ev?.allDay ?: false) }
+    var summary by rememberSaveable { mutableStateOf(ev?.summary ?: "") }
+    var allDay by rememberSaveable { mutableStateOf(ev?.allDay ?: false) }
     val s0 = ev?.let { startOf(it, master = true) } ?: day.atTime(9, 0)
     var e0 = ev?.let { endOf(it, master = true) } ?: day.atTime(10, 0)
     if (ev?.allDay == true) e0 = e0.minusDays(1) // stored end is exclusive
-    var startDate by remember { mutableStateOf(s0.toLocalDate()) }
-    var startTime by remember { mutableStateOf(s0.toLocalTime()) }
-    var endDate by remember { mutableStateOf(e0.toLocalDate()) }
-    var endTime by remember { mutableStateOf(e0.toLocalTime()) }
-    var rrule by remember { mutableStateOf(ev?.rrule ?: "") }
-    var calendarId by remember { mutableStateOf(ev?.calendarId ?: calendars.first().id) }
-    var location by remember { mutableStateOf(ev?.location ?: "") }
-    var notes by remember { mutableStateOf(ev?.description ?: "") }
+    var startDate by rememberSaveable { mutableStateOf(s0.toLocalDate()) }
+    var startTime by rememberSaveable { mutableStateOf(s0.toLocalTime()) }
+    var endDate by rememberSaveable { mutableStateOf(e0.toLocalDate()) }
+    var endTime by rememberSaveable { mutableStateOf(e0.toLocalTime()) }
+    var rrule by rememberSaveable { mutableStateOf(ev?.rrule ?: "") }
+    var calendarId by rememberSaveable { mutableStateOf(ev?.calendarId ?: calendars.first().id) }
+    var location by rememberSaveable { mutableStateOf(ev?.location ?: "") }
+    var notes by rememberSaveable { mutableStateOf(ev?.description ?: "") }
     var repeatMenu by remember { mutableStateOf(false) }
     var calMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }

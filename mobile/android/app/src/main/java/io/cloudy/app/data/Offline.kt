@@ -10,14 +10,18 @@ import java.io.File
  * Layout under filesDir/offline:
  *   files/<nodeId>/<name>     downloaded content
  *   dirs/<nodeId>.json        cached folder listing (for browsing without network)
- *   state.json                pinned ids + etag of each downloaded file
+ *   state.json                pinned ids + etag and details of each downloaded file (to open it offline)
  */
 class Offline(context: Context, private val api: Api) {
     private val root = File(context.filesDir, "offline")
     private val json = Json { ignoreUnknownKeys = true }
 
     @kotlinx.serialization.Serializable
-    private data class State(val pinned: Set<Long> = emptySet(), val etags: Map<Long, String> = emptyMap())
+    private data class State(
+        val pinned: Set<Long> = emptySet(),
+        val etags: Map<Long, String> = emptyMap(),
+        val nodes: Map<Long, FileNode> = emptyMap(),
+    )
 
     private val stateFile = File(root, "state.json")
     private var state: State = runCatching { json.decodeFromString<State>(stateFile.readText()) }.getOrDefault(State())
@@ -32,6 +36,9 @@ class Offline(context: Context, private val api: Api) {
 
     fun localFile(node: FileNode): File? =
         File(root, "files/${node.id}/${node.name}").takeIf { it.exists() && state.etags[node.id] == node.etag }
+
+    /** The node as last seen online, if its content is on the device: lets the app open it without network. */
+    fun savedNode(id: Long): FileNode? = state.nodes[id]?.takeIf { localFile(it) != null }
 
     /** Any downloaded copy, even if outdated (used when offline). */
     fun anyLocalFile(id: Long): File? = File(root, "files/$id").listFiles()?.firstOrNull()
@@ -66,6 +73,7 @@ class Offline(context: Context, private val api: Api) {
             val listing = api.node(id)
             val n = listing.node
             keep += n.id
+            state = state.copy(nodes = state.nodes + (n.id to n))
             if (n.isDir) {
                 cacheListing(listing)
                 for (c in listing.children.orEmpty()) {
@@ -90,6 +98,7 @@ class Offline(context: Context, private val api: Api) {
 
     private suspend fun fetchFile(n: FileNode, keep: MutableSet<Long>): File? {
         keep += n.id
+        state = state.copy(nodes = state.nodes + (n.id to n))
         if (localFile(n) != null) return null
         val dir = File(root, "files/${n.id}")
         dir.deleteRecursively()
@@ -111,7 +120,7 @@ class Offline(context: Context, private val api: Api) {
         }
         File(root, "files").listFiles()?.forEach { f -> if (f.name.toLongOrNull() !in live) f.deleteRecursively() }
         File(root, "dirs").listFiles()?.forEach { f -> if (f.nameWithoutExtension.toLongOrNull() !in live) f.delete() }
-        state = state.copy(etags = state.etags.filterKeys { it in live })
+        state = state.copy(etags = state.etags.filterKeys { it in live }, nodes = state.nodes.filterKeys { it in live })
         save()
     }
 

@@ -1,0 +1,7 @@
+<!-- Google Play icon: same artwork as the launcher icon (res/drawable/ic_launcher_foreground.xml on
+     @color/ic_launcher_background), cropped to the 72dp area a launcher shows. Square, no rounded corners:
+     Play applies its own mask. Render to app-icon-512.png (512×512). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="512" height="512">
+  <rect x="18" y="18" width="72" height="72" fill="#0B6BCB"/>
+  <path fill="#FFFFFF" d="M70,72H45a16,16 0,1 1,15.3 -20.6h4A10.3,10.3 0,1 1,70 72Z"/>
+</svg>

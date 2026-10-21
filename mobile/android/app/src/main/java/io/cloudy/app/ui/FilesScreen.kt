@@ -3,6 +3,7 @@ package io.cloudy.app.ui
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.ClipData
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.DriveFileMove
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -152,12 +154,31 @@ suspend fun uploadUris(context: Context, parentId: Long, uris: List<Uri>, state:
     return ok
 }
 
+/** The file on the device for handing to another app: the offline copy, or a download into the cache. */
+private suspend fun localCopy(context: Context, node: FileNode): Uri {
+    val file = Services.offline.localFile(node) ?: File(context.cacheDir, "open/${node.id}-${node.etag}/${node.name}").also {
+        if (!it.exists()) {
+            if (node.size > 5_000_000) toast(context, "Downloading ${node.name}…")
+            it.parentFile?.parentFile?.listFiles()?.filter { d -> d.name.startsWith("${node.id}-") }?.forEach { d -> d.deleteRecursively() }
+            Services.api.download(node.id, it)
+        }
+    }
+    return FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+}
+
+/** Sends the file itself (not a link) to another app: WhatsApp, Telegram, email, Bluetooth… */
+suspend fun sendToApp(context: Context, node: FileNode) {
+    val uri = localCopy(context, node)
+    val intent = Intent(Intent.ACTION_SEND).setType(node.mime.ifEmpty { "application/octet-stream" })
+        .putExtra(Intent.EXTRA_STREAM, uri)
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        .apply { clipData = ClipData.newRawUri(node.name, uri) } // grants read access to the chosen app
+    context.startActivity(Intent.createChooser(intent, "Send ${node.name}"))
+}
+
 /** Downloads (or reuses the offline copy) and opens a file in another app. */
 suspend fun openExternally(context: Context, node: FileNode) {
-    val file = Services.offline.localFile(node) ?: File(context.cacheDir, "open/${node.id}/${node.name}").also {
-        if (!it.exists()) Services.api.download(node.id, it)
-    }
-    val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+    val uri = localCopy(context, node)
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, node.mime.ifEmpty { "*/*" }).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     try {
         context.startActivity(Intent.createChooser(intent, "Open with"))
@@ -378,6 +399,7 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
                 leadingContent = { Icon(icon, null, tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) },
                 headlineContent = { Text(label, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
             )
+        if (!node.isDir) Item("Send to…", Icons.AutoMirrored.Outlined.Send) { onClose(); scope.launch { runCatching { sendToApp(context, node) }.onFailure { toast(context, it.message ?: "Failed") } } }
         if (!node.isDir) Item("Open with…", Icons.AutoMirrored.Outlined.OpenInNew) { onClose(); scope.launch { runCatching { openExternally(context, node) }.onFailure { toast(context, it.message ?: "Failed") } } }
         Item(if (node.isDir) "Save as ZIP…" else "Save to device…", Icons.Outlined.Download) { onClose(); saveAs.launch(node.name + if (node.isDir) ".zip" else "") }
         if (Services.offline.isPinned(node.id)) Item("Remove offline copy", Icons.Outlined.CloudOff) { act { Services.offline.unpin(node.id) } }
@@ -532,7 +554,9 @@ fun NodeListScreen(nav: NavController, kind: String) {
                     outgoing = list.groupBy { it.nodeId }.mapValues { (_, s) -> s.joinToString { if (it.type == "link") "link" else it.shareWith ?: "" } }
                 }.mapNotNull { it.node }.distinctBy { it.id }
                 "offline" -> coroutineScope {
-                    Services.offline.pinned.map { id -> async { runCatching { Services.api.node(id).node }.getOrNull() } }.awaitAll().filterNotNull()
+                    Services.offline.pinned.map { id ->
+                        async { runCatching { Services.api.node(id).node }.getOrNull() ?: Services.offline.savedNode(id) }
+                    }.awaitAll().filterNotNull()
                 }
                 else -> emptyList()
             }.also { ListCache.putList(kind, it) }

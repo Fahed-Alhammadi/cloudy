@@ -30,6 +30,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -131,3 +134,11 @@ fun ConfirmDialog(title: String, text: String, confirm: String, onDismiss: () ->
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirm, color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+
+/** Lets rememberSaveable keep a @Serializable model, so an open form survives rotation and process death. */
+val saveJson = Json { ignoreUnknownKeys = true }
+
+inline fun <reified T : Any> jsonSaver(): Saver<T?, String> = Saver(
+    save = { it?.let { v -> saveJson.encodeToString(v) } },
+    restore = { saveJson.decodeFromString<T>(it) },
+)

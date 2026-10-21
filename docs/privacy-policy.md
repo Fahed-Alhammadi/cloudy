@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-Last updated: October 20, 2026
+Last updated: October 21, 2026
 
 This privacy policy explains how the **Cloudy** Android app (package `io.cloudy.app`) handles your information.
 Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public at
@@ -28,7 +28,7 @@ Your files, photos, calendars, contacts and account live on the Cloudy server yo
 | **Server address, username and password** | When you sign in. The password (and, if you use two-factor authentication, the one-time code) is sent once to your server, which returns a device token. The password is not stored on the phone. | Your server only |
 | **Device token** | Kept so you stay signed in. You can see and revoke it in Cloudy's web interface (Settings → App passwords). | Stored in the app's private storage on your phone |
 | **Device name** (manufacturer and model, e.g. "Samsung SM-S911B") | Sent at sign-in to label the device token, so you can recognize it in the list of signed-in devices. | Your server only |
-| **Files and folders** | When you browse, open, upload, download, share, rename, move or delete files, edit text files, or mark files "available offline". Office documents are converted for preview by your server. | Your server; offline copies and temporary previews are stored in the app's private storage |
+| **Files and folders** | When you browse, open, upload, download, share, rename, move or delete files, edit text files, or mark files "available offline". Office documents are converted for preview by your server. | Your server; offline copies and temporary previews are stored in the app's private storage. When you use **Send to…**, the file goes to the app you pick (for example WhatsApp or email) |
 | **Photos and videos** (permission: *Photos and videos*) | Only if you turn on **Photo backup**. The app then reads photos and videos from your gallery and uploads new ones to your server in the background. You can also pick individual photos or videos to upload. | Your server only |
 | **Calendar events** | Events you view, create, edit or delete in the app. | Your server only |
 | **Contacts** | Contacts you view, create, edit or delete in the app, and contacts in a file (.vcf or .csv) that **you** choose to import. The app does **not** read your phone's address book and does not request the Contacts permission. Exported contacts go only where you choose in the share sheet. | Your server only |

@@ -52,6 +52,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -102,7 +104,11 @@ fun PreviewScreen(nav: NavController, id: Long) {
     LaunchedEffect(id) {
         runCatching { Services.api.node(id) }
             .onSuccess { node = it.node; canEdit = it.perm != "read" }
-            .onFailure { error = it.message }
+            .onFailure { e ->
+                // No connection: open the downloaded copy of an "available offline" file, read-only.
+                val saved = Services.offline.savedNode(id)
+                if (saved == null) error = e.message else { node = saved; toast(context, "Offline: showing the saved copy") }
+            }
     }
 
     Scaffold(topBar = {
@@ -247,18 +253,22 @@ private class PdfDoc(file: File) {
     }
 }
 
+private val draftSaver = Saver<String?, String>(save = { it?.takeIf { s -> s.length <= 100_000 } }, restore = { it })
+
 /** Text file; editable (with Save) when the user may change it. Saving keeps the old content as a version. */
 @Composable
 private fun TextView(n: FileNode, canEdit: Boolean, onSaved: (FileNode) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loaded by remember { mutableStateOf<String?>(null) }
-    var text by remember { mutableStateOf("") }
+    // The draft survives rotation (up to a size the saved-state bundle can hold); null until the file is loaded.
+    var draft by rememberSaveable(n.id, stateSaver = draftSaver) { mutableStateOf<String?>(null) }
+    val text = draft ?: ""
     var failed by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     LaunchedEffect(n.id) {
         runCatching { Services.offline.localFile(n)?.readText() ?: Services.api.downloadText(n.id) }
-            .onSuccess { loaded = it; text = it }
+            .onSuccess { loaded = it; if (draft == null) draft = it }
             .onFailure { failed = it.message }
     }
     val original = loaded
@@ -282,7 +292,7 @@ private fun TextView(n: FileNode, canEdit: Boolean, onSaved: (FileNode) -> Unit)
                 }) { Icon(Icons.Outlined.Save, null); Text("  Save") }
             }
             OutlinedTextField(
-                value = text, onValueChange = { text = it },
+                value = text, onValueChange = { draft = it },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                 modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).padding(bottom = 8.dp),
             )
