@@ -21,8 +21,8 @@ android {
         applicationId = "io.cloudy.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.9.4"
+        versionCode = 13
+        versionName = "1.9.5"
     }
 
     // github: APK on GitHub releases that updates itself (src/github). play: AAB for Google Play, which forbids

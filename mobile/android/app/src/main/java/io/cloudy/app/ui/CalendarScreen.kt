@@ -132,7 +132,7 @@ fun CalendarScreen() {
                 },
             )
         },
-        floatingActionButton = { FloatingActionButton(onClick = { editing = null to selected }) { Icon(Icons.Filled.Add, "New event") } },
+        floatingActionButton = { FloatingActionButton(onClick = { editing = null to selected }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "New event") } },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {

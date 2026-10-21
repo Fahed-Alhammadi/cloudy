@@ -259,7 +259,7 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
         },
         floatingActionButton = {
             if (canEdit) Box {
-                FloatingActionButton(onClick = { menuOpen = true }) { Icon(Icons.Filled.Add, "Add") }
+                FloatingActionButton(onClick = { menuOpen = true }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "Add") }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
                     DropdownMenuItem({ Text("Upload photos & videos") }, leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = {
                         menuOpen = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))

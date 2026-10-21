@@ -200,7 +200,7 @@ fun ContactsScreen() {
                 }
             })
         },
-        floatingActionButton = { if (book != null) FloatingActionButton(onClick = { editing = Contact() }) { Icon(Icons.Filled.Add, "New contact") } },
+        floatingActionButton = { if (book != null) FloatingActionButton(onClick = { editing = Contact() }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "New contact") } },
     ) { pad ->
         Column(Modifier.padding(pad)) {
             if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())

@@ -83,6 +83,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
   need their own trigger. Clients must tolerate duplicate/early events (they just reload).
 - Office files are view-only (PDF previews); only text files are editable (web + Android, `PUT /api/nodes/:id/content`).
   Image ~1.3 GB (LibreOffice + fonts); PostgreSQL's LLVM JIT is deleted (`jit=off`).
+- Android insets: the app is edge-to-edge (`enableEdgeToEdge`); keyboard-facing screens need `imePadding()`, floating
+  buttons `Modifier.sideInsets()`. Test landscape with 3-button navigation.
 - Android state: anything the user types must survive rotation/process death — `rememberSaveable` (+ `jsonSaver` for
   models); restored editors wait for their data (calendars/address book) before showing.
 - Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
@@ -95,6 +97,8 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-21: 1.9.5 (code 13) — edge-to-edge (Play notice): dropped deprecated statusBarColor/navigationBarColor from the
+  theme (enableEdgeToEdge does it), text editor `imePadding` above the keyboard, FABs clear side nav bars/cutouts (`sideInsets`).
 - 2026-10-21: 1.9.4 (code 12) — Android QA fixes: "Discard changes?" before leaving the text editor; search field focused
   on open; *Manage sharing* (list/stop links and user shares, `SharesDialog`); event end follows the start, end-before-start
   blocks Save and a rejected save keeps the editor open; contact birthday validated + date picker.
@@ -136,10 +140,6 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - 2026-10-19: Two-factor authentication (TOTP + recovery codes, QR via `qrcode`) for web, Android and API; admin reset;
   DAV Basic accepts only app passwords when 2FA is on. Compose lists every setting under `environment:` with defaults
   (`.env` optional, overrides). Server 1.3.0, Android 1.3.0 (code 3).
-- 2026-10-19: Removed server OTA (updater service, GitHub release check, `UPDATE_REPO`/`UPDATE_INTERVAL`); server updates are
-  `docker compose pull`. OTA kept for the Android APK only.
-- 2026-10-19: Swapped compose files: root `docker-compose.yml` = published image (+ inline updater); `deploy/docker-compose.yml`
-  = build from source. Removed `scripts/auto-update.sh`; CI builds via the deploy file.
 - 2026-10-19: Single all-in-one container (server + embedded PostgreSQL 17 via tini/entrypoint); `DB_PASSWORD` removed,
   `DB_PATH`/`DATABASE_URL` added, compose service renamed `cloudy` with `env_file: .env`. Existing volumes migrate as-is.
 - 2026-10-19: `.env` options `APP_USER` (run as uid:gid, default 1000:1000) and `DATA_PATH` (user-file storage, e.g. host NFS mount);

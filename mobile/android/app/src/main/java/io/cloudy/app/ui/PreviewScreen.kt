@@ -23,6 +23,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -124,7 +126,7 @@ fun PreviewScreen(nav: NavController, id: Long) {
             },
         )
     }) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        Box(Modifier.padding(pad).consumeWindowInsets(pad).fillMaxSize()) {
             val n = node
             when {
                 error != null -> EmptyState(Icons.Outlined.CloudOff, error!!)
@@ -288,7 +290,8 @@ private fun TextView(n: FileNode, canEdit: Boolean, onDirty: (Boolean) -> Unit, 
         original == null -> Loading()
         !canEdit -> Text(original, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(16.dp))
-        else -> Column(Modifier.fillMaxSize()) {
+        // imePadding: edge-to-edge, so the editor must shrink above the keyboard itself (adjustResize no longer does it).
+        else -> Column(Modifier.fillMaxSize().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (text != original) "Unsaved changes" else "Saved", Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)

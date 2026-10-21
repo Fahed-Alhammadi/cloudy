@@ -5,6 +5,11 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -142,3 +147,10 @@ inline fun <reified T : Any> jsonSaver(): Saver<T?, String> = Saver(
     save = { it?.let { v -> saveJson.encodeToString(v) } },
     restore = { saveJson.decodeFromString<T>(it) },
 )
+
+/**
+ * Keeps a floating button clear of a navigation bar or camera cutout at the side (landscape, 3-button navigation):
+ * the app is edge-to-edge, and Scaffold only insets the FAB at the bottom.
+ */
+@Composable
+fun Modifier.sideInsets(): Modifier = windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.End))
