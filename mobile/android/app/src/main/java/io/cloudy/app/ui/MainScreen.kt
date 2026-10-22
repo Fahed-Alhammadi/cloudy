@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.NetworkCheck
@@ -70,6 +71,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import io.cloudy.app.BuildConfig
 import io.cloudy.app.Services
 import io.cloudy.app.work.BackupSettings
 import io.cloudy.app.work.Jobs
@@ -116,7 +118,6 @@ fun MainScreen(sharedUris: MutableState<List<Uri>>) {
             }
         }
     }) { pad ->
-        UpdatePrompt()
         // Short transitions: the library default is a 700 ms cross-fade, which makes every tap feel slow.
         NavHost(nav, startDestination = "files/$rootId", modifier = Modifier.padding(bottom = pad.calculateBottomPadding()),
             enterTransition = { fadeIn(tween(NAV_MS)) + slideInHorizontally(tween(NAV_MS)) { it / 12 } },
@@ -184,7 +185,10 @@ fun MoreScreen(nav: NavController) {
                 leadingContent = { Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error) },
                 headlineContent = { Text("Log out", color = MaterialTheme.colorScheme.error) },
             )
-            UpdateEntry()
+            ListItem(
+                leadingContent = { Icon(Icons.Outlined.Info, null) },
+                headlineContent = { Text("Version ${BuildConfig.VERSION_NAME}") },
+            )
             Text("Offline storage: ${formatSize(Services.offline.usedBytes())}", Modifier.padding(16.dp),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }

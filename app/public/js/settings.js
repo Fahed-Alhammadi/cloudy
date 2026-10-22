@@ -54,7 +54,6 @@ export async function renderSettings(main, ctx) {
       urlRow('Files (WebDAV)', `${davBase}/files/${encodeURIComponent(me.id)}/`),
       urlRow('Calendars & contacts', `${davBase}/`),
       urlRow('Username', me.id),
-      h('p', {}, icon('download'), ' ', h('a', { href: '/download/android' }, 'Download the Cloudy Android app'), h('span', { class: 'muted' }, ' (newest release; the app updates itself)')),
       h('h3', {}, 'App passwords'),
       appPasswords.length ? h('ul', { class: 'plain-list' }, appPasswords.map((p) => h('li', {}, icon('key'),
         h('span', { class: 'grow' }, p.name, h('small', { class: 'muted' }, ` · created ${fullDate(p.createdAt)}${p.lastUsedAt ? ` · last used ${fullDate(p.lastUsedAt)}` : ''}`)),

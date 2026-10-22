@@ -133,24 +133,6 @@ data class Contact(
 )
 
 @Serializable
-data class AppRelease(
-    val versionName: String,
-    val notes: String = "",
-    val size: Long = 0,
-    /** SHA-256 GitHub reports for the asset, when available. */
-    val sha256: String? = null,
-    /** Absolute download URL of the APK. */
-    val url: String,
-)
-
-/** GitHub `GET /repos/{repo}/releases/latest`, only the fields we use. */
-@Serializable
-data class GithubRelease(val tag_name: String, val body: String? = null, val assets: List<GithubAsset> = emptyList())
-
-@Serializable
-data class GithubAsset(val name: String, val size: Long = 0, val browser_download_url: String, val digest: String? = null)
-
-@Serializable
 data class Sharees(val users: List<Sharee> = emptyList(), val groups: List<ShareeGroup> = emptyList())
 
 @Serializable

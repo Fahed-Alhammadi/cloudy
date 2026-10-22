@@ -30,35 +30,25 @@ You need JDK 17+ (e.g. `brew install openjdk@21`) and the Android SDK (platform 
 `sdk.dir` in `android/local.properties` or `ANDROID_HOME`.
 
 ```sh
-android/build-apk.sh        # → dist/Cloudy-<version>.apk (signed)
+android/build-apk.sh        # → dist/Cloudy-<version>.aab (Google Play) + .apk (adb testing), signed
 ```
 
 On the first run the script creates a signing key: `android/cloudy-release.keystore` with its passwords in
-`android/keystore.properties`. Both are git-ignored. **Back them up.** Android only installs updates signed
-with the same key.
+`android/keystore.properties`. Both are git-ignored. **Back them up.** It is the Google Play *upload key*
+(Play App Signing holds the app signing key).
 
-## Updates (from GitHub releases)
+## Releases (Google Play)
+
+The app is installed and updated through Google Play only; it has no updater of its own.
 
 1. Bump `versionCode` (must increase) and `versionName` in `android/app/build.gradle.kts`, and `version` in
    `../app/package.json` to the same version.
-2. Commit and push a tag `vX.Y.Z` (matching `versionName`). The release workflow builds the APK, signs it with the
-   key from the repository secrets, and attaches `Cloudy-X.Y.Z.apk` and `Cloudy.apk` to the GitHub release.
+2. Commit and push a tag `vX.Y.Z` (matching `versionName`). The release workflow builds the signed `.aab`, keeps
+   it as a workflow artifact and, when `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing
+   track. Promote to production in Play Console.
 
-What users see:
-- On launch, and in a daily background check (with a notification), the app asks GitHub for the latest release
-  of `UPDATE_REPO` (set in `build.gradle.kts`; CI uses the building repository) and offers **Update** when its
-  tag is newer than the installed `versionName`.
-- The app downloads the APK (without Cloudy credentials), checks GitHub's SHA-256 and opens the Android
-  installer, which only accepts APKs signed with the same key.
-- The first time, Android asks the user to allow Cloudy to install apps.
-- *More → Check for updates* checks on demand.
-- New users install from `https://<your-server>/download/android` (linked on the login page), which redirects to
-  the latest release's `Cloudy.apk`.
-
-## Install manually
-
-Copy the APK to the phone and open it (allow "Install unknown apps"), or run
-`adb install dist/Cloudy-<version>.apk`.
+For local testing: `adb install dist/Cloudy-<version>.apk` (signed with the upload key, so it can't update a
+Play install — uninstall first).
 
 ## Code map
 
@@ -67,6 +57,5 @@ Copy the APK to the phone and open it (allow "Install unknown apps"), or run
 | `data/Api.kt` | JSON API client (OkHttp, bearer token) |
 | `data/Session.kt` | Server address, token and user |
 | `data/Offline.kt` | Pinned files and cached folder listings |
-| `data/AppUpdater.kt` | Over-the-air update check, download, checksum and install |
-| `work/Workers.kt` | Background jobs: photo backup, offline sync, update check |
-| `ui/*Screen.kt`, `ui/UpdateUi.kt` | Compose screens |
+| `work/Workers.kt` | Background jobs: photo backup, offline sync |
+| `ui/*Screen.kt` | Compose screens |

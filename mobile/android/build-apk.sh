@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds the signed release APK (GitHub, self-updating) and the Google Play bundle (.aab) into ../dist/.
-# Releases are published by CI on a v* tag. For Play, this key is the *upload key* (Play App Signing).
+# Builds the signed Google Play bundle (.aab) and an APK for testing with adb into ../dist/.
+# Releases go to Google Play from CI on a v* tag; this key is the *upload key* (Play App Signing).
 # First run creates a signing key (cloudy-release.keystore + keystore.properties).
 # BACK BOTH UP: every future update must be signed with the same key.
 set -e
@@ -17,12 +17,12 @@ if [ ! -f keystore.properties ]; then
   echo "IMPORTANT: back up mobile/android/cloudy-release.keystore and keystore.properties"
 fi
 
-./gradlew -q :app:assembleGithubRelease :app:bundlePlayRelease
+./gradlew -q :app:assembleRelease :app:bundleRelease
 VERSION_NAME=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
 VERSION_CODE=$(sed -n 's/.*versionCode = \([0-9]*\).*/\1/p' app/build.gradle.kts)
 mkdir -p ../dist
 APK="../dist/Cloudy-$VERSION_NAME.apk"
 AAB="../dist/Cloudy-$VERSION_NAME.aab"
-cp app/build/outputs/apk/github/release/app-github-release.apk "$APK"
-cp app/build/outputs/bundle/playRelease/app-play-release.aab "$AAB"
+cp app/build/outputs/apk/release/app-release.apk "$APK"
+cp app/build/outputs/bundle/release/app-release.aab "$AAB"
 echo "Built $APK and $AAB (version $VERSION_NAME, code $VERSION_CODE)"

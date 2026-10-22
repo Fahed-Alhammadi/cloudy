@@ -60,7 +60,6 @@ object Jobs {
         } else {
             wm.cancelUniqueWork("backup")
         }
-        scheduleUpdateCheck(wm)
         wm.enqueueUniquePeriodicWork("offline", ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<OfflineWorker>(1, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.UNMETERED).build()).build())

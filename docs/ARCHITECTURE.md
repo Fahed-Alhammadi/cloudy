@@ -14,14 +14,13 @@ This document explains how the pieces fit together and why they are built the wa
 browser ───────▶ │  /            static HTML5 app (public/)                                   │
 Android app ───▶ │  /api/*       JSON API (session cookie or device token)                    │
                  │  /api/public  public share links (token + optional password)               │
-WebDAV / CalDAV  │  /dav/*       WebDAV files, CalDAV calendars, CardDAV address books         │
-/ CardDAV apps ─▶│  /download/android   latest Android APK (over-the-air updates)              │
+WebDAV / CalDAV  │                                                                            │
+/ CardDAV apps ─▶│  /dav/*       WebDAV files, CalDAV calendars, CardDAV address books         │
                  └─────────────┬──────────────────────────────────┬──────────────────────────┘
                                │                                  │
                          PostgreSQL 17                       /data volume
                    (metadata, shares, users,          blobs/  file contents (immutable)
-                    calendars, contacts, releases)    uploads/ resumable uploads in progress
-                                                      releases/ published APKs
+                    calendars, contacts)              uploads/ resumable uploads in progress
 ```
 
 **Container layout.**
@@ -131,23 +130,17 @@ what changed since their last sync.
 - The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every
   start.
 
-**Android app (from GitHub releases).**
-1. A `v*` tag builds the signed APK in CI and attaches `Cloudy-<version>.apk` and `Cloudy.apk` to the GitHub
-   release. The workflow fails if the tag doesn't match `app/package.json` or the app's `versionName`.
-2. The app asks `api.github.com/repos/<UPDATE_REPO>/releases/latest` on launch and daily (WorkManager, with a
-   notification) and offers the update when the tag is newer than its `versionName`.
-3. It downloads the APK with an HTTP client that carries no Cloudy credentials, checks the SHA-256 GitHub
-   reports for the asset, and opens the system installer.
-4. Android itself refuses an APK signed with a different key, so only builds from the original signing key can
-   update an install.
-5. `/download/android` redirects to `github.com/<APP_REPO>/releases/latest/download/Cloudy.apk` (login page link).
+**Android app (Google Play).**
+1. A `v*` tag builds the signed `.aab` in CI (the workflow fails if the tag doesn't match `app/package.json` or the
+   app's `versionName`) and, when `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing track.
+2. Google Play installs and updates the app; the app has no updater of its own. Play App Signing holds the app
+   key; `cloudy-release.keystore` is the upload key.
 
 ## 7. Security notes
 
 - Downloads: only images (except SVG), audio, video, PDF and text are ever served inline. Text is always sent as
   `text/plain`, with `nosniff` and a sandbox CSP. Uploaded HTML or SVG can't run on the app's origin.
 - The web app runs under a strict Content Security Policy (`default-src 'self'`, no inline scripts).
-- Uploaded APKs must be ZIP archives, and their version code must increase.
 
 ## 8. Known limits
 

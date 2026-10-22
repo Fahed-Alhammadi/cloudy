@@ -5,7 +5,7 @@
 <h1 align="center">Cloudy</h1>
 
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
-database inside), a browser app, and a native Android app that updates itself from GitHub releases.
+database inside), a browser app, and a native Android app on Google Play.
 
 ## Screenshots
 
@@ -35,7 +35,7 @@ database inside), a browser app, and a native Android app that updates itself fr
   - back up photos automatically;
   - calendar and contacts;
   - edit text files;
-  - **updates itself** from this repository's GitHub releases.
+  - installed and updated through Google Play.
 - **Live updates:** file lists in the browser and the Android app update by themselves when files change
   anywhere (another device, a share, WebDAV), like Google Drive.
 - **Office documents:** Word, Excel, PowerPoint and OpenDocument files can be viewed (read-only) in the browser
@@ -169,18 +169,12 @@ docker compose pull && docker compose up -d
 The database schema migrates itself at startup. Your data stays in the volumes. The release workflow in
 `.github/workflows/release.yml` publishes the image to GitHub Container Registry when you push a `v*` tag.
 
-**Android app.** The same `v*` tag builds the signed APK and attaches it to the GitHub release. Installed apps
-check the latest GitHub release when opened and once a day, and offer the update — nothing to upload to your
-server. Bump `version` in `app/package.json` and `versionCode`/`versionName` in
-`mobile/android/app/build.gradle.kts` before tagging (the release workflow refuses a tag that doesn't match).
-New users install from `https://<your-server>/download/android` (linked on the login page), which points to the
-latest release. See [mobile/README.md](mobile/README.md).
-
-**Google Play.** The app has two builds: `github` (the self-updating APK above) and `play` (an `.aab` without the
-updater, which Play forbids — Play installs the updates). `mobile/android/build-apk.sh` builds both into
-`mobile/dist/`; the release workflow keeps the `.aab` as a workflow artifact and, once the
-`PLAY_SERVICE_ACCOUNT_JSON` secret is set, uploads it to the Play closed-testing track. The two builds are
-signed with different keys (Play re-signs its copy), so switching between them means uninstalling first.
+**Android app.** The app is distributed and updated through Google Play only. The same `v*` tag builds the
+signed `.aab` (`.github/workflows/release.yml`), keeps it as a workflow artifact and, once the
+`PLAY_SERVICE_ACCOUNT_JSON` secret is set, uploads it to the Play closed-testing track. Bump `version` in
+`app/package.json` and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts` before tagging (the
+release workflow refuses a tag that doesn't match). `mobile/android/build-apk.sh` builds the bundle locally (plus an
+APK for `adb install` testing) into `mobile/dist/`. See [mobile/README.md](mobile/README.md).
 
 ## Two-factor authentication
 
@@ -272,5 +266,5 @@ mobile/android/      native Android app (Kotlin, Jetpack Compose)
 docs/                architecture notes
 deploy/              docker-compose.yml that builds the image from source
 tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests
-.github/workflows/   CI and release automation (Docker image + APK)
+.github/workflows/   CI and release automation (Docker image + Play bundle)
 ```

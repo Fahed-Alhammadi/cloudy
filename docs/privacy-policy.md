@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-Last updated: October 21, 2026
+Last updated: October 22, 2026
 
 This privacy policy explains how the **Cloudy** Android app (package `io.cloudy.app`) handles your information.
 Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public at
@@ -32,23 +32,19 @@ Your files, photos, calendars, contacts and account live on the Cloudy server yo
 | **Photos and videos** (permission: *Photos and videos*) | Only if you turn on **Photo backup**. The app then reads photos and videos from your gallery and uploads new ones to your server in the background. You can also pick individual photos or videos to upload. | Your server only |
 | **Calendar events** | Events you view, create, edit or delete in the app. | Your server only |
 | **Contacts** | Contacts you view, create, edit or delete in the app, and contacts in a file (.vcf or .csv) that **you** choose to import. The app does **not** read your phone's address book and does not request the Contacts permission. Exported contacts go only where you choose in the share sheet. | Your server only |
-| **Notifications** (permission: *Notifications*, GitHub version only) | To tell you when a new version of the app is available. The Google Play version does not request this permission. | Shown on your phone only |
 | **Network state** | To run photo backup and offline sync only on the network you allow (for example Wi-Fi only). | Stays on your phone |
 
 The app does **not** access your location, camera, microphone, phone calls, SMS or phone contacts, and it does not collect advertising IDs or device identifiers.
 
 ## App updates
 
-- **Version from Google Play:** updated by Google Play. Google's privacy policy applies to Google Play.
-- **Version downloaded from GitHub:** about once a day and when you open it, the app asks GitHub
-  (`api.github.com`, `github.com`) whether a newer version exists, and downloads it when you choose **Update**. These requests contain no Cloudy data. As with any website, GitHub receives your IP address and basic request information; see [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement). Installing the update requires the *Install unknown apps* permission, which Android asks you to allow.
+The app is updated by Google Play; it does not check for or download updates itself. Google's privacy policy applies to Google Play.
 
 ## Sharing of information
 
 We do not sell, rent or share your information with anyone, and we do not have access to it. The app sends data only to:
 
-- the Cloudy server you sign in to (see above), and
-- GitHub, for the update check described above (GitHub version only).
+- the Cloudy server you sign in to (see above).
 
 When you share a file or a link, or export contacts, the information goes only to the people or apps you choose.
 

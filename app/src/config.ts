@@ -17,8 +17,6 @@ export const config = {
   trustProxy: /^(1|true|yes)$/i.test(env.TRUST_PROXY ?? ''),
   /** Address users open Cloudy at (e.g. https://cloud.example.com); passkeys are bound to it. Empty = from the request. */
   publicUrl: (env.PUBLIC_URL ?? '').trim().replace(/\/+$/, ''),
-  /** GitHub repository whose releases carry the Android APK (for /download/android). */
-  appRepo: env.APP_REPO || 'Fahed-Alhammadi/cloudy',
   chunkSize: 8 * 1024 * 1024,
   version: (env.APP_VERSION || pkg.version) as string,
   publicDir: fileURLToPath(new URL('../public/', import.meta.url)),

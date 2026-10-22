@@ -65,11 +65,6 @@ router.get('/api/diagnostics', authed(async ({ req, res }, user) => {
 
 // Live updates (Server-Sent Events): {folders, shares} whenever something the user can see changes.
 router.get('/api/events', authed(async ({ res }, user) => openStream(user.id, res)));
-// The Android APK is published on GitHub releases (stable asset name Cloudy.apk).
-router.get('/download/android', async ({ res }) => {
-  res.writeHead(302, { Location: `https://github.com/${config.appRepo}/releases/latest/download/Cloudy.apk`, 'Cache-Control': 'no-cache' });
-  res.end();
-});
 router.get('/status', async ({ res }) => {
   await q('SELECT 1');
   json(res, { ok: true, version: config.version });

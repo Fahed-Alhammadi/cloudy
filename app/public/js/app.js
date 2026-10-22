@@ -136,8 +136,7 @@ function renderLogin(message, notice = false) {
       codeField,
       error, btn,
       passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, 'or'),
-      passkeyBtn,
-      h('a', { class: 'android-link', href: '/download/android' }, icon('download'), 'Get the Android app'))));
+      passkeyBtn)));
   get('/api/auth/options').then((o) => { forgot.hidden = !o.passwordReset; }, () => {});
   user.focus();
   passkeyAutofillAvailable().then((ok) => ok && !passkeyAbort && app.contains(user) && passkeyLogin(true));

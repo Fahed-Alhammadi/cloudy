@@ -129,20 +129,16 @@ class Api(private val session: Session) {
     /** Streams a file (or a folder as ZIP) to [dest]. */
     suspend fun download(id: Long, dest: File, onProgress: (Long) -> Unit = {}) = downloadUrlTo(downloadUrl(id), dest, onProgress = onProgress)
 
-    /** HTTP client without Cloudy credentials, for GitHub (app updates). */
-    val plainHttp: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS).readTimeout(5, TimeUnit.MINUTES).build()
-
     /** Text files: create and save (the server keeps the previous content as a version). */
     suspend fun createTextFile(parentId: Long, name: String): FileNode =
         decode(sendJson("POST", "/api/nodes/$parentId/files", buildJsonObject { put("name", name); put("content", "") }))
     suspend fun saveText(id: Long, text: String): FileNode =
         decode(send("PUT", "/api/nodes/$id/content", text.toRequestBody("text/plain; charset=utf-8".toMediaType())))
 
-    /** Downloads a URL. Use [plainHttp] for anything not on the Cloudy server (never send our token elsewhere). */
-    suspend fun downloadUrlTo(absoluteUrl: String, dest: File, client: OkHttpClient = http, onProgress: (Long) -> Unit = {}) = withContext(Dispatchers.IO) {
+    /** Downloads a Cloudy server URL (sends our credentials, so never use it for other hosts). */
+    suspend fun downloadUrlTo(absoluteUrl: String, dest: File, onProgress: (Long) -> Unit = {}) = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(absoluteUrl).build()
-        client.newCall(req).execute().use { res ->
+        http.newCall(req).execute().use { res ->
             if (!res.isSuccessful) throw ApiException(res.code, "Download failed (HTTP ${res.code})")
             dest.parentFile?.mkdirs()
             val tmp = File(dest.path + ".part")

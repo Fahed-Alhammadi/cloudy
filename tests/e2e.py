@@ -344,15 +344,9 @@ check('revoked token rejected', s == 401)
 s, _ = mob.req('POST', '/api/auth/token', {'user': ADMIN, 'password': 'nope'})
 check('token needs valid password', s == 401)
 
-print('== server version and Android download')
+print('== server version')
 s, st = Client().req('GET', '/status')
 check('status reports version', s == 200 and st.get('version'), st)
-noredir = urllib.request.build_opener(type('NoRedirect', (urllib.request.HTTPRedirectHandler,), {'redirect_request': lambda *a: None}))
-try:
-    r = noredir.open(BASE + '/download/android'); s, loc = r.status, r.headers.get('Location')
-except urllib.error.HTTPError as e:
-    s, loc = e.code, e.headers.get('Location')
-check('Android download redirects to GitHub releases', s == 302 and loc.startswith('https://github.com/') and loc.endswith('/releases/latest/download/Cloudy.apk'), loc)
 s, _ = admin.req('GET', '/api/admin/app/android')
 check('server-side APK publishing removed', s == 404)
 

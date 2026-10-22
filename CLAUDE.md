@@ -2,7 +2,7 @@
 
 ## Overview
 Self-hosted cloud for files, sharing, calendars and contacts: Node.js/TypeScript server + plain-HTML5 web app +
-native Android app with over-the-air updates. Ships as ONE container (Node 24 server + embedded PostgreSQL 17 +
+native Android app (Google Play only). Ships as ONE container (Node 24 server + embedded PostgreSQL 17 +
 LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configured from `.env`. TLS/reverse proxy is external.
 
 ## Structure
@@ -11,7 +11,7 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
   the `/run/cloudy` socket, then node as APP_USER; supervises both), `pg_hba.conf`.
 - `deploy/docker-compose.yml` — builds `app/` from source (`build: ../app`, `env_file: ../.env`); run from repo root with
   `-f deploy/docker-compose.yml --env-file .env`. Same project name/volumes as the root file. Keep the two in sync.
-- `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image + signed APK on the GitHub release).
+- `.github/workflows/` — `ci.yml` (typecheck, e2e against compose, Android debug build), `release.yml` (on `v*` tag: GHCR image, GitHub release notes, signed Play AAB → Play closed track).
 - `docs/index.html` — GitHub Pages site (app info for Google Play, screenshots in `docs/screenshots/`, links to
   `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/app-icon.svg` → `app-icon-512.png` — Google Play icon (launcher artwork, square, RGBA); `docs/play/` — Play
   store screenshots + feature graphic (`render.py`, headless Chrome); `docs/privacy-policy.md` — app privacy policy
@@ -36,13 +36,11 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `app/src/groupware.ts` — calendar/address-book store shared by DAV and JSON API (ical.js parsing, sync change log).
 - `app/src/dav/` — `server.ts` WebDAV (files) + CalDAV/CardDAV under `/dav`; `xml.ts` namespace-aware XML + multistatus.
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
-  chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`. `/download/android` (server.ts)
-  redirects to the latest GitHub release's `Cloudy.apk` (`APP_REPO`).
+  chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`.
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, AppUpdater = GitHub releases, Live = SSE + Office),
-  `work/Workers.kt` (photo backup, offline sync), `ui/` screens (PreviewScreen edits text files). Flavors: `github`
-  (`src/github/`: AppUpdater, UpdateUi, UpdateWorker = GitHub self-update) and `play` (`src/play/`: no-op stubs, manifest
-  drops REQUEST_INSTALL_PACKAGES/POST_NOTIFICATIONS). `build-apk.sh` → `mobile/dist/` APK (github) + AAB (play).
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, Live = SSE + Office),
+  `work/Workers.kt` (photo backup, offline sync), `ui/` screens (PreviewScreen edits text files). No flavors.
+  `build-apk.sh` → `mobile/dist/` Play AAB + APK for adb testing.
 
 ## Tech Stack
 Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`, `nodemailer`; Postgres 17 (Debian);
@@ -57,7 +55,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Logs: `docker logs -f cloudy` · Reset all data: `docker compose down -v`
 - Type-check: `cd app && npm install && npm run typecheck`
 - E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>`
-- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 36) → GitHub APK + Play AAB. Releases (image + APK on GitHub) come
+- Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 36) → Play AAB + test APK. Releases (image + Play AAB) come
   from a `vX.Y.Z` tag; CI refuses it unless `app/package.json` and `versionName` are X.Y.Z.
 
 ## Conventions
@@ -90,13 +88,14 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
   short NavHost transitions (`NAV_MS`); PDFs render one page at a time on demand.
 - Email is optional: `sendMail` is a no-op without SMTP settings; never reveal whether an account exists.
-- Play policy: nothing self-updating or APK-installing may live in `src/main`; put it in `src/github` with a stub in
-  `src/play`. Play App Signing: Google holds the app key, `cloudy-release.keystore` is the upload key.
-- Android updates: the app never sends Cloudy credentials to GitHub (`Api.plainHttp`); update prefs are keyed by
-  versionName (`skippedVersion`, `notifiedVersion`).
+- Android ships only through Google Play: no self-updating/APK-installing code, no REQUEST_INSTALL_PACKAGES.
+  Play App Signing: Google holds the app key, `cloudy-release.keystore` is the upload key.
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-22: 1.9.6 (code 14) — Google Play only: removed the GitHub self-updater (`github`/`play` flavors, AppUpdater, UpdateUi,
+  UpdateWorker, `Api.plainHttp`, install/notification permissions), `/download/android` + `APP_REPO`, the login-page
+  and Settings download links; release workflow no longer attaches APKs; docs/privacy policy updated.
 - 2026-10-21: 1.9.5 (code 13) — edge-to-edge (Play notice): dropped deprecated statusBarColor/navigationBarColor from the
   theme (enableEdgeToEdge does it), text editor `imePadding` above the keyboard, FABs clear side nav bars/cutouts (`sideInsets`).
 - 2026-10-21: 1.9.4 (code 12) — Android QA fixes: "Discard changes?" before leaving the text editor; search field focused

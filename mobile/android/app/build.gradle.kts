@@ -21,20 +21,8 @@ android {
         applicationId = "io.cloudy.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "1.9.5"
-    }
-
-    // github: APK on GitHub releases that updates itself (src/github). play: AAB for Google Play, which forbids
-    // self-updates: no updater code (src/play stubs), no REQUEST_INSTALL_PACKAGES/POST_NOTIFICATIONS.
-    flavorDimensions += "store"
-    productFlavors {
-        create("github") {
-            dimension = "store"
-            // GitHub repository whose latest release carries the APK the app updates itself from.
-            buildConfigField("String", "UPDATE_REPO", "\"${project.findProperty("updateRepo") ?: "Fahed-Alhammadi/cloudy"}\"")
-        }
-        create("play") { dimension = "store" }
+        versionCode = 14
+        versionName = "1.9.6"
     }
 
     signingConfigs {
