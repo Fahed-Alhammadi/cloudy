@@ -17,7 +17,10 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import io.cloudy.app.R
 import io.cloudy.app.Services
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
 /** Photo backup settings, stored in app preferences. */
@@ -48,7 +51,13 @@ class BackupSettings(context: Context) {
 }
 
 object Jobs {
+    /** Safe to call from the UI thread: reading the settings and WorkManager's database happens in the background. */
     fun schedule(context: Context) {
+        val app = context.applicationContext
+        Services.appScope.launch(Dispatchers.IO) { scheduleNow(app) }
+    }
+
+    private fun scheduleNow(context: Context) {
         val wm = WorkManager.getInstance(context)
         val settings = BackupSettings(context)
         if (settings.enabled) {
@@ -123,10 +132,10 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                 settings.lastAdded = item.added
                 uploaded++
             }
-            settings.lastResult = "Uploaded $uploaded new item(s)"
+            settings.lastResult = ctx.getString(R.string.backup_result_uploaded, uploaded)
             return Result.success()
         } catch (e: Exception) {
-            settings.lastResult = "Failed: ${e.message}"
+            settings.lastResult = ctx.getString(R.string.backup_result_failed, e.message ?: "")
             return Result.retry()
         } finally {
             settings.lastRun = System.currentTimeMillis()

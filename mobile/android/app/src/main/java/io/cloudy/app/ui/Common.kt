@@ -45,7 +45,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.cloudy.app.R
 import io.cloudy.app.data.FileNode
 import java.time.Instant
 import java.time.ZoneId
@@ -70,7 +72,9 @@ fun formatSize(bytes: Long): String {
     var n = bytes.toDouble()
     var i = 0
     while (n >= 1024 && i < units.size - 1) { n /= 1024; i++ }
-    return if (i == 0) "$bytes B" else String.format(if (n < 10) "%.1f %s" else "%.0f %s", n, units[i])
+    // Latin digits, isolated, so "9.0 MB" keeps its order inside right-to-left (Arabic) text.
+    val text = if (i == 0) "$bytes B" else String.format(java.util.Locale.ROOT, if (n < 10) "%.1f %s" else "%.0f %s", n, units[i])
+    return "\u2068$text\u2069"
 }
 
 private val dateFmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
@@ -119,14 +123,17 @@ fun EmptyState(icon: ImageVector, text: String) =
     }
 
 @Composable
-fun TextPrompt(title: String, initial: String = "", label: String = "Name", confirm: String = "OK", onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+fun TextPrompt(
+    title: String, initial: String = "", label: String = stringResource(R.string.name), confirm: String = stringResource(R.string.ok),
+    onDismiss: () -> Unit, onConfirm: (String) -> Unit,
+) {
     var value by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(value, { value = it }, label = { Text(label) }, singleLine = true) },
         confirmButton = { TextButton(enabled = value.isNotBlank(), onClick = { onConfirm(value.trim()) }) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -137,7 +144,7 @@ fun ConfirmDialog(title: String, text: String, confirm: String, onDismiss: () ->
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirm, color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 
 /** Lets rememberSaveable keep a @Serializable model, so an open form survives rotation and process death. */

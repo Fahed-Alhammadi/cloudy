@@ -241,3 +241,5 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_shares boolean NOT NULL DEFAULT true;
+-- Preferred UI/email language (i18n.ts LANGUAGES); NULL = follow the browser / phone.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS language text;

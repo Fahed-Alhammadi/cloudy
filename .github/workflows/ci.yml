@@ -18,6 +18,8 @@ jobs:
       - name: Type-check
         working-directory: app
         run: npm ci && npm run typecheck
+      - name: Translations complete
+        run: python3 tests/i18n_check.py
       - name: Start stack
         run: |
           printf 'ADMIN_USER=admin\nADMIN_PASSWORD=ci-admin-password\n' > .env

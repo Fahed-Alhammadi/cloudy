@@ -1,6 +1,7 @@
 // Full-screen HTML5 viewer: images, video, audio, PDF and an editable text view.
 import { api } from './api.js';
 import { h, icon, formatSize, toast, showError, confirmDialog } from './ui.js';
+import { t } from './i18n.js';
 
 const TEXT_LIMIT = 2 * 1024 * 1024;
 
@@ -24,20 +25,22 @@ export function openViewer(files, start, src) {
   const stage = h('div', { class: 'viewer-stage' });
   const title = h('div', { class: 'viewer-title' });
   const actions = h('div', { class: 'viewer-actions' });
-  const prev = h('button', { class: 'icon-btn viewer-nav prev', 'aria-label': 'Previous', onclick: () => go(-1) }, icon('left'));
-  const next = h('button', { class: 'icon-btn viewer-nav next', 'aria-label': 'Next', onclick: () => go(1) }, icon('right'));
+  const prev = h('button', { class: 'icon-btn viewer-nav prev', 'aria-label': t('Previous'), onclick: () => go(-1) }, icon('left'));
+  const next = h('button', { class: 'icon-btn viewer-nav next', 'aria-label': t('Next'), onclick: () => go(1) }, icon('right'));
   const dlg = h('dialog', { class: 'viewer' },
-    h('header', {}, title, actions, h('button', { class: 'icon-btn', 'aria-label': 'Close', onclick: () => close() }, icon('x'))),
+    h('header', {}, title, actions, h('button', { class: 'icon-btn', 'aria-label': t('Close'), onclick: () => close() }, icon('x'))),
     stage, prev, next,
   );
 
+  const confirmDiscard = () => confirmDialog(t('Discard changes?'), t('You have unsaved changes.'), t('Discard'), true);
+
   async function close() {
-    if (dirty && !(await confirmDialog('Discard changes?', 'You have unsaved changes.', 'Discard', true))) return;
+    if (dirty && !(await confirmDiscard())) return;
     dlg.close();
   }
 
   async function go(delta) {
-    if (dirty && !(await confirmDialog('Discard changes?', 'You have unsaved changes.', 'Discard', true))) return;
+    if (dirty && !(await confirmDiscard())) return;
     const n = files.length;
     index = (index + delta + n) % n;
     show();
@@ -49,7 +52,7 @@ export function openViewer(files, start, src) {
     const kind = kindOf(node);
     title.replaceChildren(h('strong', {}, node.name), h('span', { class: 'muted' }, ` · ${formatSize(node.size)}`));
     actions.replaceChildren(
-      h('a', { class: 'btn ghost', href: src.url(node, false), download: node.name }, icon('download'), 'Download'),
+      h('a', { class: 'btn ghost', href: src.url(node, false), download: node.name }, icon('download'), t('Download')),
     );
     prev.hidden = next.hidden = files.length < 2;
     stage.replaceChildren();
@@ -60,14 +63,14 @@ export function openViewer(files, start, src) {
     else if (kind === 'pdf') stage.append(h('iframe', { src: inline, title: node.name }));
     else if (src.preview?.(node)) await showPreview(node, src.preview(node));
     else if (kind === 'text' && node.size <= TEXT_LIMIT) await showText(node, inline);
-    else stage.append(h('div', { class: 'no-preview' }, icon('file'), h('p', {}, 'No preview available for this file type.'),
-      h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), 'Download')));
+    else stage.append(h('div', { class: 'no-preview' }, icon('file'), h('p', {}, t('No preview available for this file type.')),
+      h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), t('Download'))));
   }
 
   /** Office document: the server converts it to PDF (can take a few seconds the first time). */
   async function showPreview(node, url) {
     const shown = node;
-    const note = h('div', { class: 'no-preview' }, icon('file'), h('p', {}, 'Preparing preview…'));
+    const note = h('div', { class: 'no-preview' }, icon('file'), h('p', {}, t('Preparing preview…')));
     stage.append(note);
     // Wait for the conversion, then let the iframe load the (now cached) PDF; the body isn't read here.
     const ctl = new AbortController();
@@ -76,8 +79,8 @@ export function openViewer(files, start, src) {
     if (files[index] !== shown) return;
     if (!res.ok) {
       const msg = await res.json().then((j) => j.error, () => null);
-      note.replaceChildren(icon('file'), h('p', {}, msg || 'No preview available for this file.'),
-        h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), 'Download'));
+      note.replaceChildren(icon('file'), h('p', {}, msg ? t(msg) : t('No preview available for this file.')),
+        h('a', { class: 'btn primary', href: src.url(node, false), download: node.name }, icon('download'), t('Download')));
       return;
     }
     stage.replaceChildren(h('iframe', { src: url, title: node.name }));
@@ -97,13 +100,13 @@ export function openViewer(files, start, src) {
         const updated = await api('PUT', `/api/nodes/${node.id}/content`, new Blob([area.value], { type: 'text/plain' }));
         files[index] = { ...node, ...updated };
         dirty = false;
-        toast('Saved');
+        toast(t('Saved'));
         src.onSaved?.();
       } catch (e) {
         save.disabled = false;
         showError(e);
       }
-    } }, icon('save'), 'Save');
+    } }, icon('save'), t('Save'));
     area.addEventListener('input', () => { dirty = true; save.disabled = false; });
     area.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); if (!save.disabled) save.click(); }

@@ -1,5 +1,7 @@
 package io.cloudy.app.ui
 
+import io.cloudy.app.R
+import androidx.compose.ui.res.stringResource
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
@@ -116,7 +118,7 @@ fun CalendarScreen() {
             val s = gridStart.atStartOfDay(zone).toInstant().toString()
             val e = gridStart.plusDays(42).atStartOfDay(zone).toInstant().toString()
             events = calendars.flatMap { c -> runCatching { Services.api.events(c.id, s, e) }.getOrDefault(emptyList()) }
-        } catch (e: Exception) { toast(context, e.message ?: "Failed to load calendar") }
+        } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.calendar_load_failed)) }
         calendarsLoaded = true
     }
     val colorOf = calendars.associate { it.id to parseColor(it.color) }
@@ -126,13 +128,13 @@ fun CalendarScreen() {
             TopAppBar(
                 title = { Text(month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()) + " " + month.year) },
                 actions = {
-                    IconButton(onClick = { month = month.minusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous month") }
-                    TextButton(onClick = { month = YearMonth.now(); selected = LocalDate.now() }) { Text("Today") }
-                    IconButton(onClick = { month = month.plusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next month") }
+                    IconButton(onClick = { month = month.minusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous_month)) }
+                    TextButton(onClick = { month = YearMonth.now(); selected = LocalDate.now() }) { Text(stringResource(R.string.today)) }
+                    IconButton(onClick = { month = month.plusMonths(1) }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next_month)) }
                 },
             )
         },
-        floatingActionButton = { FloatingActionButton(onClick = { editing = null to selected }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "New event") } },
+        floatingActionButton = { FloatingActionButton(onClick = { editing = null to selected }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, stringResource(R.string.new_event)) } },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
@@ -170,17 +172,17 @@ fun CalendarScreen() {
             Text(selected.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             val today = events.filter { onDay(it, selected) }.sortedWith(compareBy({ !it.allDay }, { startOf(it) }))
-            if (today.isEmpty()) Text("No events", Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline)
+            if (today.isEmpty()) Text(stringResource(R.string.no_events), Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline)
             LazyColumn {
                 items(today, key = { it.uri + it.start }) { e ->
                     ListItem(
                         modifier = Modifier.clickable { editing = e to selected },
                         leadingContent = { Box(Modifier.width(4.dp).height(36.dp).background(colorOf[e.calendarId] ?: Accent, RoundedCornerShape(2.dp))) },
-                        headlineContent = { Text(e.summary.ifEmpty { "(no title)" }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        headlineContent = { Text(e.summary.ifEmpty { stringResource(R.string.no_title) }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
-                            Text(if (e.allDay) "All day" else "${startOf(e).toLocalTime()} – ${endOf(e).toLocalTime()}" + if (e.location.isNotEmpty()) " · ${e.location}" else "")
+                            Text(if (e.allDay) stringResource(R.string.all_day) else "${startOf(e).toLocalTime()} – ${endOf(e).toLocalTime()}" + if (e.location.isNotEmpty()) " · ${e.location}" else "")
                         },
-                        trailingContent = { if (e.recurring) Icon(Icons.Outlined.Repeat, "Repeats", tint = MaterialTheme.colorScheme.outline) },
+                        trailingContent = { if (e.recurring) Icon(Icons.Outlined.Repeat, stringResource(R.string.repeats), tint = MaterialTheme.colorScheme.outline) },
                     )
                 }
             }
@@ -189,12 +191,12 @@ fun CalendarScreen() {
     // A restored editor (after rotation) waits until the calendars have loaded again.
     editing?.takeIf { calendarsLoaded }?.let { (ev, day) ->
         if (calendars.isEmpty()) {
-            toast(context, "No calendar available"); editing = null
+            toast(context, context.getString(R.string.no_calendar)); editing = null
         } else EventEditor(ev, day, calendars, onDismiss = { editing = null }) { op ->
             // The editor stays open until the server accepts the change, so a rejected save loses nothing.
             if (!saving) scope.launch {
                 saving = true
-                try { op(); reloadKey++; editing = null } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+                try { op(); reloadKey++; editing = null } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)) }
                 saving = false
             }
         }
@@ -229,7 +231,8 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
     var repeatMenu by remember { mutableStateOf(false) }
     var calMenu by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val repeats = listOf("" to "Does not repeat", "DAILY" to "Daily", "WEEKLY" to "Weekly", "MONTHLY" to "Monthly", "YEARLY" to "Yearly")
+    val repeats = listOf("" to R.string.does_not_repeat, "DAILY" to R.string.daily, "WEEKLY" to R.string.weekly, "MONTHLY" to R.string.monthly, "YEARLY" to R.string.yearly)
+        .map { (k, label) -> k to stringResource(label) }
 
     fun pickDate(d: LocalDate, set: (LocalDate) -> Unit) =
         DatePickerDialog(context, { _, y, m, dd -> set(LocalDate.of(y, m + 1, dd)) }, d.year, d.monthValue - 1, d.dayOfMonth).show()
@@ -252,22 +255,22 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (ev == null) "New event" else "Edit event") },
+        title = { Text(stringResource(if (ev == null) R.string.new_event else R.string.edit_event)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(summary, { summary = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) { Text("All day", Modifier.weight(1f)); Switch(allDay, { allDay = it }) }
-                Text("Starts", style = MaterialTheme.typography.labelMedium)
+                OutlinedTextField(summary, { summary = it }, label = { Text(stringResource(R.string.event_title)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.all_day), Modifier.weight(1f)); Switch(allDay, { allDay = it }) }
+                Text(stringResource(R.string.starts), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickDate(startDate) { moveStart(it, startTime) } }) { Text(startDate.toString()) }
                     if (!allDay) OutlinedButton(onClick = { pickTime(startTime) { moveStart(startDate, it) } }) { Text(startTime.toString()) }
                 }
-                Text("Ends", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.ends), style = MaterialTheme.typography.labelMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { pickDate(endDate) { endDate = it } }) { Text(endDate.toString()) }
                     if (!allDay) OutlinedButton(onClick = { pickTime(endTime) { endTime = it } }) { Text(endTime.toString()) }
                 }
-                if (endBeforeStart) Text("The end is before the start.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                if (endBeforeStart) Text(stringResource(R.string.end_before_start), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 Box {
                     OutlinedButton(onClick = { repeatMenu = true }) { Icon(Icons.Outlined.Repeat, null); Text("  " + repeats.first { it.first == rrule }.second) }
                     DropdownMenu(repeatMenu, { repeatMenu = false }) {
@@ -280,21 +283,22 @@ private fun EventEditor(ev: CalEvent?, day: LocalDate, calendars: List<DavCollec
                         calendars.forEach { c -> DropdownMenuItem({ Text(c.name) }, onClick = { calendarId = c.id; calMenu = false }) }
                     }
                 }
-                OutlinedTextField(location, { location = it }, label = { Text("Location") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                if (ev?.recurring == true) Text("Changes apply to every occurrence.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                if (ev != null) TextButton(onClick = { confirmDelete = true }) { Text("Delete event", color = MaterialTheme.colorScheme.error) }
+                OutlinedTextField(location, { location = it }, label = { Text(stringResource(R.string.location)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(notes, { notes = it }, label = { Text(stringResource(R.string.notes)) }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                if (ev?.recurring == true) Text(stringResource(R.string.applies_all), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                if (ev != null) TextButton(onClick = { confirmDelete = true }) { Text(stringResource(R.string.delete_event), color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
             TextButton(enabled = summary.isNotBlank() && !endBeforeStart, onClick = {
                 val data = input()
                 onDone { if (ev == null) Services.api.createEvent(calendarId, data) else Services.api.updateEvent(ev.calendarId, ev.uri, data) }
-            }) { Text("Save") }
+            }) { Text(stringResource(R.string.save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
-    if (confirmDelete && ev != null) ConfirmDialog("Delete event", if (ev.recurring) "Delete all occurrences?" else "Delete this event?", "Delete", { confirmDelete = false }) {
+    if (confirmDelete && ev != null) ConfirmDialog(stringResource(R.string.delete_event),
+        stringResource(if (ev.recurring) R.string.delete_all_occurrences else R.string.delete_this_event), stringResource(R.string.delete), { confirmDelete = false }) {
         onDone { Services.api.deleteEvent(ev.calendarId, ev.uri) }
     }
 }

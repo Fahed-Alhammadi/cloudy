@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""Checks translations (stdlib only, no server needed): python3 tests/i18n_check.py
+
+- web: every t('…') text in app/public/js has an entry in each app/public/i18n/<lang>.json, same {placeholders}
+- Android: every string in res/values has each res/values-<lang> translation, same %1$s/%1$d arguments
+- the language list is the same in src/i18n.ts, js/i18n.js, locales_config.xml and Lang.kt
+"""
+import glob, json, os, re, sys
+import xml.etree.ElementTree as ET
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WEB = os.path.join(ROOT, 'app/public')
+RES = os.path.join(ROOT, 'mobile/android/app/src/main/res')
+errors = []
+
+
+def langs_in(path, pattern):
+    return re.findall(pattern, open(os.path.join(ROOT, path)).read())
+
+
+# ---- language lists
+server = re.search(r"LANGUAGES = \[([^\]]+)\]", open(os.path.join(ROOT, 'app/src/i18n.ts')).read()).group(1)
+lists = {
+    'app/src/i18n.ts': re.findall(r"'(\w+)'", server),
+    'app/public/js/i18n.js': langs_in('app/public/js/i18n.js', r"\['(\w+)', '[^']+'\]"),
+    'locales_config.xml': langs_in('mobile/android/app/src/main/res/xml/locales_config.xml', r'android:name="(\w+)"'),
+    'Lang.kt': re.findall(r'"(\w+)"', re.search(r'val CODES = listOf\(([^)]*)\)', open(os.path.join(ROOT, 'mobile/android/app/src/main/java/io/cloudy/app/data/Lang.kt')).read()).group(1)),
+}
+first = next(iter(lists.values()))
+for where, codes in lists.items():
+    if codes != first:
+        errors.append(f'language list in {where} is {codes}, expected {first}')
+translated = [c for c in first if c != 'en']
+
+# ---- web
+call = re.compile(r"""\bt\(\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")""")
+keys = set()
+for f in glob.glob(os.path.join(WEB, 'js/*.js')):
+    src = open(f).read()
+    for m in call.finditer(src):
+        keys.add((m.group(1) if m.group(1) is not None else m.group(2)).replace("\\'", "'").replace('\\"', '"'))
+    # Labels kept in tables and translated where they are drawn, e.g. NAV in app.js.
+    keys.update(re.findall(r"\['[\w-]+', '([^']+)', '\w+'\]", src))
+ph = lambda s: sorted(re.findall(r'\{\w+\}', s))
+for lang in translated:
+    path = os.path.join(WEB, f'i18n/{lang}.json')
+    d = json.load(open(path)) if os.path.exists(path) else {}
+    for k in sorted(keys):
+        if k not in d: errors.append(f'web {lang}: missing "{k}"')
+        elif ph(k) != ph(d[k]): errors.append(f'web {lang}: placeholders differ in "{k}"')
+
+# ---- Android
+def strings(path):
+    return {e.get('name'): (e.text or '', e.get('translatable') != 'false') for e in ET.parse(path).getroot().iter('string')}
+base = strings(os.path.join(RES, 'values/strings.xml'))
+args = lambda s: sorted(re.findall(r'%\d\$[sd]', s))
+for lang in translated:
+    path = os.path.join(RES, f'values-{lang}/strings.xml')
+    tr = strings(path) if os.path.exists(path) else {}
+    for name, (text, translatable) in base.items():
+        if not translatable: continue
+        if name not in tr: errors.append(f'android {lang}: missing {name}')
+        elif args(text) != args(tr[name][0]): errors.append(f'android {lang}: format arguments differ in {name}')
+    for name in tr.keys() - base.keys():
+        errors.append(f'android {lang}: {name} is not in values/strings.xml')
+
+if errors:
+    print('\n'.join(errors))
+    sys.exit(1)
+print(f'i18n OK: {len(first)} languages, {len(keys)} web strings, {len(base)} Android strings')

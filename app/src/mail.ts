@@ -9,6 +9,8 @@ import { json, noContent, readJson, HttpError, publicOrigin, clientIp } from './
 import { q, one } from './db.ts';
 import type { User } from './auth.ts';
 import { hashPassword, checkPasswordStrength, newToken, sha256, forgetBasicCache } from './auth.ts';
+import { pickLanguage, mailText, isRtl } from './i18n.ts';
+import type { Lang } from './i18n.ts';
 
 type Authed = (ctx: Ctx, user: User) => Promise<void>;
 type Wrap = (h: Authed) => (ctx: Ctx) => Promise<void>;
@@ -71,7 +73,7 @@ function transporter(c: MailConfig): Transporter {
 
 // ---------------------------------------------------------------- sending
 
-interface Message { to: string; subject: string; text: string; action?: { label: string; url: string } }
+interface Message { to: string; subject: string; text: string; action?: { label: string; url: string }; lang?: Lang }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -80,7 +82,8 @@ function html(m: Message): string {
   const button = m.action
     ? `<p style="margin:22px 0"><a href="${escapeHtml(m.action.url)}" style="background:#3d6ff0;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;display:inline-block">${escapeHtml(m.action.label)}</a></p>`
     : '';
-  return `<!doctype html><html><body style="margin:0;background:#f4f6fa;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2633">
+  const lang = m.lang ?? 'en';
+  return `<!doctype html><html lang="${lang}" dir="${isRtl(lang) ? 'rtl' : 'ltr'}"><body style="margin:0;background:#f4f6fa;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2633">
 <div style="max-width:520px;margin:24px auto;background:#fff;border-radius:12px;padding:28px 28px 18px">
 <div style="font-weight:600;font-size:18px;margin-bottom:18px">☁ Cloudy</div>${paras}${button}</div></body></html>`;
 }
@@ -114,34 +117,37 @@ export async function notifyShare(req: IncomingMessage, sharer: User, nodeId: nu
   if (!(await mailEnabled())) return;
   const node = await one<{ name: string; is_dir: boolean }>(`SELECT name, is_dir FROM nodes WHERE id = $1`, [nodeId]);
   if (!node) return;
-  const recipients = await q<{ email: string; display_name: string }>(
+  const recipients = await q<{ email: string; display_name: string; language: string | null }>(
     type === 'group'
-      ? `SELECT u.email, u.display_name FROM group_members m JOIN users u ON u.id = m.user_id
+      ? `SELECT u.email, u.display_name, u.language FROM group_members m JOIN users u ON u.id = m.user_id
           WHERE m.group_id = $1 AND u.id <> $2 AND NOT u.disabled AND u.notify_shares AND u.email <> ''`
-      : `SELECT email, display_name FROM users WHERE id = $1 AND id <> $2 AND NOT disabled AND notify_shares AND email <> ''`,
+      : `SELECT email, display_name, language FROM users WHERE id = $1 AND id <> $2 AND NOT disabled AND notify_shares AND email <> ''`,
     [shareWith, sharer.id],
   );
   const who = sharer.display_name || sharer.id;
-  const what = node.is_dir ? 'folder' : 'file';
   for (const r of recipients) {
+    const lang = pickLanguage(r.language);
+    const vars = { who, name: node.name, user: r.display_name || '', group: type === 'group' ? mailText(lang, 'shareGroup', { group: shareWith }) : '' };
     sendMail({
-      to: r.email,
-      subject: `${who} shared "${node.name}" with you`,
-      text: `Hi ${r.display_name || ''},\n\n${who} shared the ${what} "${node.name}" with you${type === 'group' ? ` (group ${shareWith})` : ''}. You'll find it under "Shared with you".\n\nYou can turn these emails off in Cloudy under Settings → Profile.`,
-      action: { label: 'Open Cloudy', url: `${publicOrigin(req)}/#/shared-in` },
+      to: r.email, lang,
+      subject: mailText(lang, 'shareSubject', vars),
+      text: mailText(lang, node.is_dir ? 'shareFolder' : 'shareFile', vars),
+      action: { label: mailText(lang, 'open'), url: `${publicOrigin(req)}/#/shared-in` },
     });
   }
 }
 
 /** Security notice after a password change or reset. */
 export async function notifyPasswordChanged(req: IncomingMessage, userId: string): Promise<void> {
-  const u = await one<{ email: string; display_name: string }>(`SELECT email, display_name FROM users WHERE id = $1`, [userId]);
+  const u = await one<{ email: string; display_name: string; language: string | null }>(
+    `SELECT email, display_name, language FROM users WHERE id = $1`, [userId]);
   if (!u?.email) return;
+  const lang = pickLanguage(u.language, req);
   sendMail({
-    to: u.email,
-    subject: 'Your Cloudy password was changed',
-    text: `Hi ${u.display_name || userId},\n\nThe password of your Cloudy account "${userId}" was just changed (from ${clientIp(req)}).\n\nIf this wasn't you, reset your password right away and tell your administrator.`,
-    action: { label: 'Open Cloudy', url: publicOrigin(req) },
+    to: u.email, lang,
+    subject: mailText(lang, 'pwSubject'),
+    text: mailText(lang, 'pwText', { user: u.display_name || userId, id: userId, ip: clientIp(req) }),
+    action: { label: mailText(lang, 'open'), url: publicOrigin(req) },
   });
 }
 
@@ -174,18 +180,19 @@ export function registerMail(r: Router, authed: Wrap, admin: Wrap) {
     const login = String((await readJson(req)).login ?? '').trim();
     if (!login || !(await mailEnabled())) return noContent(res);
     if (!allowReset(`ip:${clientIp(req)}`, 5, 3600_000)) throw new HttpError(429, 'Too many requests, try again later');
-    const u = await one<{ id: string; email: string; display_name: string }>(
-      `SELECT id, email, display_name FROM users WHERE (id = $1 OR lower(email) = lower($1)) AND NOT disabled AND email <> '' LIMIT 1`, [login]);
+    const u = await one<{ id: string; email: string; display_name: string; language: string | null }>(
+      `SELECT id, email, display_name, language FROM users WHERE (id = $1 OR lower(email) = lower($1)) AND NOT disabled AND email <> '' LIMIT 1`, [login]);
     if (u && allowReset(`user:${u.id}`, 3, 3600_000)) {
       const token = newToken(32);
       await q(`DELETE FROM password_resets WHERE user_id = $1`, [u.id]);
       await q(`INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES ($1, $2, now() + make_interval(mins => $3))`,
         [sha256(token), u.id, RESET_MINUTES]);
+      const lang = pickLanguage(u.language, req);
       sendMail({
-        to: u.email,
-        subject: 'Reset your Cloudy password',
-        text: `Hi ${u.display_name || u.id},\n\nSomeone (hopefully you) asked to reset the password of your Cloudy account "${u.id}". The link works once and expires in ${RESET_MINUTES} minutes.\n\nIf you didn't ask for this, ignore this email — your password stays the same.`,
-        action: { label: 'Choose a new password', url: `${publicOrigin(req)}/#/reset/${token}` },
+        to: u.email, lang,
+        subject: mailText(lang, 'resetSubject'),
+        text: mailText(lang, 'resetText', { user: u.display_name || u.id, id: u.id, minutes: RESET_MINUTES }),
+        action: { label: mailText(lang, 'resetAction'), url: `${publicOrigin(req)}/#/reset/${token}` },
       });
     }
     noContent(res);
@@ -239,11 +246,12 @@ export function registerMail(r: Router, authed: Wrap, admin: Wrap) {
     const to = String((await readJson(req)).to ?? '').trim() || me.email;
     if (!EMAIL_RE.test(to)) throw new HttpError(400, 'Enter an address to send the test to (or add an email to your profile)');
     try {
+      const lang = pickLanguage(me.language, req);
       await sendMailNow({
-        to,
-        subject: 'Cloudy test email',
-        text: `This is a test email from your Cloudy server.\n\nEmail is set up correctly — Cloudy can send password reset links and notifications.`,
-        action: { label: 'Open Cloudy', url: publicOrigin(req) },
+        to, lang,
+        subject: mailText(lang, 'testSubject'),
+        text: mailText(lang, 'testText'),
+        action: { label: mailText(lang, 'open'), url: publicOrigin(req) },
       });
     } catch (e: any) {
       if (e instanceof HttpError) throw e;

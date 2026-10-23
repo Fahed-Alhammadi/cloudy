@@ -7,6 +7,7 @@ import { renderContacts } from './contacts.js';
 import { renderSettings, renderAdmin } from './settings.js';
 import { passkeysSupported, passkeyAutofillAvailable, getPasskey, isPasskeyCancel } from './passkey.js';
 import { loadOfficeInfo } from './office.js';
+import { t, LANGUAGES, currentLanguage, setLanguage, storedLanguage } from './i18n.js';
 
 const app = document.getElementById('app');
 const ctx = { me: null, rerender: () => route(), refreshMe };
@@ -17,6 +18,8 @@ async function refreshMe() {
 }
 
 async function startSession() {
+  // The account's language wins over the one picked on the login page (null = keep that / the browser's).
+  if (ctx.me.language && ctx.me.language !== currentLanguage()) await setLanguage(ctx.me.language);
   await loadOfficeInfo();
   renderShell();
   route();
@@ -70,19 +73,25 @@ function scheduleRefresh(delay) {
 // Only one WebAuthn request may be pending; the autofill one is aborted before any other login.
 let passkeyAbort = null;
 
+/** Language menu for the login pages; `rerender` draws the page again in the new language. */
+function languagePicker(rerender) {
+  return h('select', { class: 'lang-picker', 'aria-label': t('Language'), onchange: async (e) => { await setLanguage(e.target.value); rerender(); } },
+    LANGUAGES.map(([code, name]) => h('option', { value: code, selected: code === currentLanguage() }, name)));
+}
+
 function renderLogin(message, notice = false) {
   passkeyAbort?.abort();
   passkeyAbort = null;
   if (/^#\/(forgot|reset\/)/.test(location.hash)) history.replaceState(null, '', location.pathname);
-  const user = h('input', { type: 'text', name: 'username', autocomplete: 'username webauthn', required: true, autofocus: true, 'aria-label': 'Username' });
-  const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': 'Password' });
+  const user = h('input', { type: 'text', name: 'username', autocomplete: 'username webauthn', required: true, autofocus: true, 'aria-label': t('Username') });
+  const pass = h('input', { type: 'password', name: 'password', autocomplete: 'current-password', required: true, 'aria-label': t('Password') });
   // Second step for accounts with two-factor authentication; shown when the server asks for it.
-  const code = h('input', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', 'aria-label': 'Authentication code', placeholder: '123 456' });
-  const codeField = h('label', { class: 'field', hidden: true }, h('span', {}, 'Authentication code'), code,
-    h('small', { class: 'muted' }, 'From your authenticator app, or one of your recovery codes.'));
+  const code = h('input', { type: 'text', name: 'code', autocomplete: 'one-time-code', inputmode: 'numeric', 'aria-label': t('Authentication code'), placeholder: '123 456' });
+  const codeField = h('label', { class: 'field', hidden: true }, h('span', {}, t('Authentication code')), code,
+    h('small', { class: 'muted' }, t('From your authenticator app, or one of your recovery codes.')));
   const error = h('p', { class: notice ? 'notice' : 'error', role: 'alert' }, message || '');
-  const forgot = h('a', { class: 'forgot-link', href: '#/forgot', hidden: true, onclick: (e) => { e.preventDefault(); renderForgot(user.value.trim()); } }, 'Forgot password?');
-  const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Log in');
+  const forgot = h('a', { class: 'forgot-link', href: '#/forgot', hidden: true, onclick: (e) => { e.preventDefault(); renderForgot(user.value.trim()); } }, t('Forgot password?'));
+  const btn = h('button', { class: 'btn primary block', type: 'submit' }, t('Log in'));
   const passkeyLogin = async (conditional) => {
     passkeyAbort?.abort();
     const abort = (passkeyAbort = new AbortController());
@@ -97,7 +106,7 @@ function renderLogin(message, notice = false) {
       await refreshMe();
     } catch (err) {
       if (abort.signal.aborted) return;
-      if (!isPasskeyCancel(err)) error.textContent = err.message;
+      if (!isPasskeyCancel(err)) error.textContent = t(err.message);
       // Offer passkeys in autofill again after a dialog or a failed sign-in (not after the
       // autofill request itself failed, which would just fail again).
       if ((picked || !conditional) && passkeyAbort === abort && app.contains(user)) {
@@ -105,7 +114,7 @@ function renderLogin(message, notice = false) {
       }
     }
   };
-  const passkeyBtn = passkeysSupported() && h('button', { class: 'btn block', type: 'button', onclick: () => passkeyLogin(false) }, icon('key'), 'Sign in with a passkey');
+  const passkeyBtn = passkeysSupported() && h('button', { class: 'btn block', type: 'button', onclick: () => passkeyLogin(false) }, icon('key'), t('Sign in with a passkey'));
   app.replaceChildren(h('main', { class: 'login' },
     h('form', { class: 'login-card', onsubmit: async (e) => {
       e.preventDefault();
@@ -122,7 +131,7 @@ function renderLogin(message, notice = false) {
           codeField.hidden = false;
           code.focus();
         } else {
-          error.textContent = err.message;
+          error.textContent = t(err.message);
           if (!codeField.hidden) code.select();
         }
         btn.disabled = false;
@@ -130,13 +139,14 @@ function renderLogin(message, notice = false) {
       }
     } },
       h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'),
-      h('label', { class: 'field' }, h('span', {}, 'Username'), user),
-      h('label', { class: 'field' }, h('span', {}, 'Password'), pass),
+      h('label', { class: 'field' }, h('span', {}, t('Username')), user),
+      h('label', { class: 'field' }, h('span', {}, t('Password')), pass),
       forgot,
       codeField,
       error, btn,
-      passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, 'or'),
-      passkeyBtn)));
+      passkeyBtn && h('div', { class: 'login-or', 'aria-hidden': 'true' }, t('or')),
+      passkeyBtn,
+      languagePicker(() => renderLogin(message, notice)))));
   get('/api/auth/options').then((o) => { forgot.hidden = !o.passwordReset; }, () => {});
   user.focus();
   passkeyAutofillAvailable().then((ok) => ok && !passkeyAbort && app.contains(user) && passkeyLogin(true));
@@ -146,29 +156,30 @@ function renderLogin(message, notice = false) {
 
 function authCard(...kids) {
   passkeyAbort?.abort();
-  app.replaceChildren(h('main', { class: 'login' }, h('form', { class: 'login-card' }, h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'), ...kids)));
+  app.replaceChildren(h('main', { class: 'login' }, h('form', { class: 'login-card' }, h('div', { class: 'brand big' }, icon('cloud'), 'Cloudy'), ...kids.filter(Boolean))));
   return app.querySelector('form');
 }
 
 function renderForgot(initial = '') {
-  const login = h('input', { type: 'text', autocomplete: 'username', required: true, value: initial, 'aria-label': 'Username or email' });
+  const login = h('input', { type: 'text', autocomplete: 'username', required: true, value: initial, 'aria-label': t('Username or email') });
   const msg = h('p', { class: 'error', role: 'alert' });
-  const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Send reset link');
+  const btn = h('button', { class: 'btn primary block', type: 'submit' }, t('Send reset link'));
   const form = authCard(
-    h('p', {}, 'Enter your username or email. If your account has an email address, we will send you a link to choose a new password.'),
-    h('label', { class: 'field' }, h('span', {}, 'Username or email'), login),
+    h('p', {}, t('Enter your username or email. If your account has an email address, we will send you a link to choose a new password.')),
+    h('label', { class: 'field' }, h('span', {}, t('Username or email')), login),
     msg, btn,
-    h('a', { href: '#', onclick: (e) => { e.preventDefault(); renderLogin(); } }, 'Back to login'));
+    h('a', { href: '#', onclick: (e) => { e.preventDefault(); renderLogin(); } }, t('Back to login')),
+    languagePicker(() => renderForgot(login.value)));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btn.disabled = true;
     try {
       await post('/api/auth/forgot', { login: login.value.trim() });
       msg.className = 'notice';
-      msg.textContent = 'If an account matches, a reset link is on its way. Check your inbox (and spam folder).';
+      msg.textContent = t('If an account matches, a reset link is on its way. Check your inbox (and spam folder).');
     } catch (err) {
       msg.className = 'error';
-      msg.textContent = err.message;
+      msg.textContent = t(err.message);
       btn.disabled = false;
     }
   });
@@ -176,23 +187,24 @@ function renderForgot(initial = '') {
 }
 
 function renderReset(token) {
-  const pw1 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': 'New password' });
-  const pw2 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': 'Repeat new password' });
+  const pw1 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': t('New password') });
+  const pw2 = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, required: true, 'aria-label': t('Repeat new password') });
   const msg = h('p', { class: 'error', role: 'alert' });
-  const btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Set new password');
+  const btn = h('button', { class: 'btn primary block', type: 'submit' }, t('Set new password'));
   const form = authCard(
-    h('label', { class: 'field' }, h('span', {}, 'New password (8+ characters)'), pw1),
-    h('label', { class: 'field' }, h('span', {}, 'Repeat new password'), pw2),
-    msg, btn);
+    h('label', { class: 'field' }, h('span', {}, t('New password (8+ characters)')), pw1),
+    h('label', { class: 'field' }, h('span', {}, t('Repeat new password')), pw2),
+    msg, btn,
+    languagePicker(() => renderReset(token)));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (pw1.value !== pw2.value) { msg.textContent = 'The passwords do not match.'; return; }
+    if (pw1.value !== pw2.value) { msg.textContent = t('The passwords do not match.'); return; }
     btn.disabled = true;
     try {
       await post('/api/auth/reset', { token, password: pw1.value });
-      renderLogin('Your password was changed. Log in with the new one.', true);
+      renderLogin(t('Your password was changed. Log in with the new one.'), true);
     } catch (err) {
-      msg.textContent = err.message;
+      msg.textContent = t(err.message);
       btn.disabled = false;
     }
   });
@@ -215,26 +227,28 @@ let main;
 let nav;
 
 function renderShell() {
-  const search = h('input', { type: 'search', placeholder: 'Search files', 'aria-label': 'Search files', onkeydown: (e) => {
+  const search = h('input', { type: 'search', placeholder: t('Search files'), 'aria-label': t('Search files'), onkeydown: (e) => {
     if (e.key === 'Enter' && search.value.trim()) location.hash = `#/search/${encodeURIComponent(search.value.trim())}`;
   } });
-  nav = h('nav', { class: 'sidebar', 'aria-label': 'Main' },
+  nav = h('nav', { class: 'sidebar', 'aria-label': t('Main') },
     h('ul', {}, NAV.map((item) => item === '-' ? h('li', { class: 'sep' }) : h('li', {},
-      h('a', { href: `#/${item[0]}`, 'data-view': item[0] }, icon(item[2]), h('span', {}, item[1]))))),
+      h('a', { href: `#/${item[0]}`, 'data-view': item[0] }, icon(item[2]), h('span', {}, t(item[1])))))),
     h('div', { class: 'grow' }),
     h('ul', {},
-      h('li', {}, h('a', { href: '#/settings', 'data-view': 'settings' }, icon('settings'), h('span', {}, 'Settings'))),
-      ctx.me.isAdmin && h('li', {}, h('a', { href: '#/admin', 'data-view': 'admin' }, icon('shield'), h('span', {}, 'Administration')))),
-    h('div', { class: 'usage' }, `${formatSize(ctx.me.used)}${ctx.me.quotaBytes ? ` of ${formatSize(ctx.me.quotaBytes)}` : ''} used`),
+      h('li', {}, h('a', { href: '#/settings', 'data-view': 'settings' }, icon('settings'), h('span', {}, t('Settings')))),
+      ctx.me.isAdmin && h('li', {}, h('a', { href: '#/admin', 'data-view': 'admin' }, icon('shield'), h('span', {}, t('Administration'))))),
+    h('div', { class: 'usage' }, ctx.me.quotaBytes
+      ? t('{used} of {quota} used', { used: formatSize(ctx.me.used), quota: formatSize(ctx.me.quotaBytes) })
+      : t('{used} used', { used: formatSize(ctx.me.used) })),
   );
   main = h('main', { class: 'content', id: 'content', tabindex: -1 });
   const header = h('header', { class: 'topbar' },
-    h('button', { class: 'icon-btn menu-toggle', 'aria-label': 'Toggle menu', onclick: () => document.body.classList.toggle('nav-open') }, icon('menu')),
+    h('button', { class: 'icon-btn menu-toggle', 'aria-label': t('Toggle menu'), onclick: () => document.body.classList.toggle('nav-open') }, icon('menu')),
     h('a', { class: 'brand', href: '#/files' }, icon('cloud'), 'Cloudy'),
     h('div', { class: 'search' }, icon('search'), search),
-    h('button', { class: 'avatar-btn', 'aria-label': 'Account menu', onclick: (e) => showMenu(e.currentTarget, [
+    h('button', { class: 'avatar-btn', 'aria-label': t('Account menu'), onclick: (e) => showMenu(e.currentTarget, [
       { label: ctx.me.displayName, icon: 'contacts', onclick: () => (location.hash = '#/settings') },
-      { label: 'Log out', icon: 'logout', onclick: async () => { stopLiveUpdates(); await post('/api/logout').catch(() => {}); ctx.me = null; renderLogin(); } },
+      { label: t('Log out'), icon: 'logout', onclick: async () => { stopLiveUpdates(); await post('/api/logout').catch(() => {}); ctx.me = null; renderLogin(); } },
     ]) }, (ctx.me.displayName || ctx.me.id).slice(0, 1).toUpperCase()),
   );
   app.replaceChildren(header, h('div', { class: 'layout' }, nav, main));
@@ -261,7 +275,7 @@ async function route() {
       case 'admin': await renderAdmin(main, ctx); break;
       default: location.hash = '#/files';
     }
-    document.title = `${nav.querySelector('a.active span')?.textContent || 'Files'} – Cloudy`;
+    document.title = `${nav.querySelector('a.active span')?.textContent || t('Files')} – Cloudy`;
   } catch (e) {
     if (e.status === 404 && view === 'files') location.hash = '#/files';
     else if (e.status !== 401) showError(e);
@@ -276,9 +290,10 @@ window.addEventListener('cloudy:unauthorized', () => {
   if (!ctx.me) return;
   stopLiveUpdates();
   ctx.me = null;
-  renderLogin('Your session has expired. Please log in again.');
+  renderLogin(t('Your session has expired. Please log in again.'));
 });
 
+await setLanguage(storedLanguage());
 const startHash = location.hash;
 const resetLink = /^#\/reset\/([\w-]+)$/.exec(startHash);
 if (resetLink) renderReset(resetLink[1]);

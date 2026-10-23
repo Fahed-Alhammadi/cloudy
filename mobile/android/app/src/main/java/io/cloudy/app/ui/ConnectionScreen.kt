@@ -1,5 +1,7 @@
 package io.cloudy.app.ui
 
+import io.cloudy.app.R
+import androidx.compose.ui.res.stringResource
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -80,15 +82,15 @@ fun ConnectionScreen(nav: NavController) {
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Connection check") },
-            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            title = { Text(stringResource(R.string.connection_check)) },
+            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             actions = {
-                IconButton(enabled = !running, onClick = { shareReport(context, server, items) }) { Icon(Icons.Outlined.Share, "Share report") }
+                IconButton(enabled = !running, onClick = { shareReport(context, server, items) }) { Icon(Icons.Outlined.Share, stringResource(R.string.share_report)) }
             },
         )
     }) { pad ->
         Column(Modifier.padding(pad).fillMaxSize().verticalScroll(rememberScrollState())) {
-            Text("Checks that $server works from this phone through its reverse proxy, including the addresses other apps use. Nothing on the server is changed.",
+            Text(stringResource(R.string.connection_intro, server),
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             items.forEach { CheckRow(it) }
             if (!running && items.isNotEmpty()) {
@@ -96,25 +98,25 @@ fun ConnectionScreen(nav: NavController) {
                 val warns = items.count { it.state == CheckState.WARN }
                 Text(
                     when {
-                        fails > 0 -> "$fails problem(s) found. See the fixes above."
-                        warns > 0 -> "Works, with $warns warning(s)."
-                        else -> "Everything works."
+                        fails > 0 -> stringResource(R.string.problems_found, fails)
+                        warns > 0 -> stringResource(R.string.works_with_warnings, warns)
+                        else -> stringResource(R.string.everything_works)
                     },
                     Modifier.padding(16.dp), style = MaterialTheme.typography.titleSmall,
                 )
             }
             Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = !running, onClick = { runKey++ }) { Text(if (running) "Checking…" else "Run again") }
-                OutlinedButton(enabled = !running && items.isNotEmpty(), onClick = { shareReport(context, server, items) }) { Text("Share report") }
+                Button(enabled = !running, onClick = { runKey++ }) { Text(stringResource(if (running) R.string.checking else R.string.run_again)) }
+                OutlinedButton(enabled = !running && items.isNotEmpty(), onClick = { shareReport(context, server, items) }) { Text(stringResource(R.string.share_report)) }
             }
 
             HorizontalDivider(Modifier.padding(top = 16.dp))
-            Text("Addresses for other apps", Modifier.padding(16.dp), style = MaterialTheme.typography.titleSmall)
-            Text("Use these in a WebDAV client (Files apps, rclone…) or a calendar/contacts app (DAVx⁵, iPhone, Thunderbird). Sign in with your username and an app password from Cloudy's web Settings.",
+            Text(stringResource(R.string.addresses_other_apps), Modifier.padding(16.dp), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.addresses_note),
                 Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-            UrlRow(context, "Files (WebDAV)", davFiles)
-            UrlRow(context, "Calendars & contacts", davRoot)
-            UrlRow(context, "Username", user)
+            UrlRow(context, stringResource(R.string.files_webdav), davFiles)
+            UrlRow(context, stringResource(R.string.calendars_contacts), davRoot)
+            UrlRow(context, stringResource(R.string.username), user)
         }
     }
 }
@@ -138,7 +140,7 @@ private fun CheckRow(item: CheckItem) {
         supportingContent = {
             Column {
                 if (item.detail.isNotBlank()) Text(item.detail, style = MaterialTheme.typography.bodySmall)
-                if (item.fix.isNotBlank()) Text("How to fix: ${item.fix}", Modifier.padding(top = 4.dp),
+                if (item.fix.isNotBlank()) Text(stringResource(R.string.how_to_fix, item.fix), Modifier.padding(top = 4.dp),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
         },
@@ -153,8 +155,8 @@ private fun UrlRow(context: Context, label: String, value: String) {
         trailingContent = {
             IconButton(onClick = {
                 context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(label, value))
-                toast(context, "$label copied")
-            }) { Icon(Icons.Outlined.ContentCopy, "Copy $label") }
+                toast(context, context.getString(R.string.copied_name, label))
+            }) { Icon(Icons.Outlined.ContentCopy, stringResource(R.string.copy_name, label)) }
         },
         modifier = Modifier.fillMaxWidth(),
     )
@@ -168,5 +170,5 @@ private fun shareReport(context: Context, server: String, items: List<CheckItem>
             if (i.fix.isNotBlank()) appendLine("    fix: ${i.fix}")
         }
     }
-    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share report"))
+    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), context.getString(R.string.share_report)))
 }

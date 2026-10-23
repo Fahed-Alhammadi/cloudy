@@ -15,9 +15,10 @@ export interface User {
   quota_bytes: number | null;
   totp_enabled: boolean;
   notify_shares: boolean;
+  language: string | null;
 }
 
-const USER_COLS = 'id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled, notify_shares';
+const USER_COLS = 'id, display_name, email, is_admin, disabled, quota_bytes, totp_enabled, notify_shares, language';
 const SESSION_COOKIE = 'cloudy_session';
 
 function scrypt(pw: string, salt: Buffer): Promise<Buffer> {

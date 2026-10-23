@@ -67,6 +67,7 @@ export async function userJson(u: User) {
     twoFactor: !!u.totp_enabled,
     passkeys: keys?.n ?? 0,
     notifyShares: u.notify_shares !== false,
+    language: u.language ?? null,
     disabled: u.disabled,
     quotaBytes: u.quota_bytes,
     used: await usage(u.id),

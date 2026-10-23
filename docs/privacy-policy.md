@@ -4,7 +4,7 @@ title: Privacy Policy
 
 # Privacy Policy
 
-Last updated: October 22, 2026
+Last updated: October 23, 2026
 
 This privacy policy explains how the **Cloudy** Android app (package `io.cloudy.app`) handles your information.
 Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public at
@@ -15,7 +15,8 @@ Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public a
 - Cloudy is an app for **your own Cloudy server**, which you, your company or someone you trust runs ("self-hosted").
   The app sends your data only to the server address you enter when you sign in.
 - **We, the developer, do not run that server and do not receive, collect, store or sell your data.**
-- The app contains **no advertising, no analytics and no tracking**, and no third-party code that collects data.
+- The app contains **no advertising, no analytics and no tracking**. The optional document scanner is provided by Google Play
+  services (see below).
 
 ## Who is responsible for your data
 
@@ -32,9 +33,12 @@ Your files, photos, calendars, contacts and account live on the Cloudy server yo
 | **Photos and videos** (permission: *Photos and videos*) | Only if you turn on **Photo backup**. The app then reads photos and videos from your gallery and uploads new ones to your server in the background. You can also pick individual photos or videos to upload. | Your server only |
 | **Calendar events** | Events you view, create, edit or delete in the app. | Your server only |
 | **Contacts** | Contacts you view, create, edit or delete in the app, and contacts in a file (.vcf or .csv) that **you** choose to import. The app does **not** read your phone's address book and does not request the Contacts permission. Exported contacts go only where you choose in the share sheet. | Your server only |
+| **Document scans** | Only when you tap **Scan document**. The scanner is Google's ML Kit document scanner, which runs inside Google Play services: it opens the camera in its own screen and processes the pages on your phone. The app itself has no camera permission and receives only the finished PDF, which it uploads to the folder you chose. Google Play services may send diagnostic and usage information about the scanner to Google ([Google's privacy policy](https://policies.google.com/privacy)). | The PDF goes to your server only |
+| **App lock** | Only if you turn on **App lock**. Android asks for your fingerprint, face or screen lock; the app only learns whether it succeeded and never sees biometric data. | Stays on your phone |
+| **Language** | The language you choose in the app. It is also saved in your account on your server, so the web interface and emails use it. | Stored on your phone and your server |
 | **Network state** | To run photo backup and offline sync only on the network you allow (for example Wi-Fi only). | Stays on your phone |
 
-The app does **not** access your location, camera, microphone, phone calls, SMS or phone contacts, and it does not collect advertising IDs or device identifiers.
+The app does **not** request access to your location, camera, microphone, phone calls, SMS or phone contacts (the document scanner uses the camera through Google Play services, as described above), and it does not collect advertising IDs or device identifiers.
 
 ## App updates
 
@@ -44,7 +48,8 @@ The app is updated by Google Play; it does not check for or download updates its
 
 We do not sell, rent or share your information with anyone, and we do not have access to it. The app sends data only to:
 
-- the Cloudy server you sign in to (see above).
+- the Cloudy server you sign in to (see above);
+- Google Play services, only when you use the document scanner (see above).
 
 When you share a file or a link, or export contacts, the information goes only to the people or apps you choose.
 

@@ -1,4 +1,5 @@
 // DOM helpers, icons, dialogs and formatting shared by all views.
+import { t, locale } from './i18n.js';
 
 export function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);
@@ -67,7 +68,7 @@ const P = {
 
 export function icon(name, cls = '') {
   const span = document.createElement('span');
-  span.className = `icon ${cls}`;
+  span.className = `icon ${cls}${name === 'left' || name === 'right' ? ' mirror-rtl' : ''}`;
   span.setAttribute('aria-hidden', 'true');
   span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${P[name] || P.file}</svg>`;
   return span;
@@ -91,11 +92,12 @@ export function formatSize(bytes) {
   let i = 0;
   let n = bytes;
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
-  return `${i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
+  // Isolated so "9.0 MB" keeps its order inside right-to-left (Arabic) text.
+  return `\u2068${i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)} ${units[i]}\u2069`;
 }
 
-const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 export function formatDate(value) {
+  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
   const d = new Date(value);
   const diff = (d.getTime() - Date.now()) / 1000;
   const abs = Math.abs(diff);
@@ -103,9 +105,9 @@ export function formatDate(value) {
   if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
   if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
   if (abs < 86400 * 7) return rtf.format(Math.round(diff / 86400), 'day');
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' });
 }
-export const fullDate = (v) => new Date(v).toLocaleString();
+export const fullDate = (v) => new Date(v).toLocaleString(locale());
 
 export function clear(el) {
   while (el.firstChild) el.firstChild.remove();
@@ -123,8 +125,9 @@ export function toast(message, kind = 'info') {
   setTimeout(() => t.remove(), 4000);
 }
 
+// Server messages are English; the ones in the dictionary are shown translated.
 export function showError(e) {
-  toast(e?.message || String(e), 'error');
+  toast(t(e?.message || String(e)), 'error');
 }
 
 // ---------------------------------------------------------------- dialogs
@@ -134,11 +137,11 @@ export function showError(e) {
  * Resolves with the clicked button's value (or null when dismissed).
  * `onSubmit(value)` may return false to keep the dialog open.
  */
-export function modal({ title, body, buttons = [{ label: 'Close', value: null }], wide = false, onSubmit }) {
+export function modal({ title, body, buttons = [{ label: t('Close'), value: null }], wide = false, onSubmit }) {
   return new Promise((resolve) => {
     const form = h('form', { method: 'dialog', class: 'dialog-form' });
     const dlg = h('dialog', { class: `modal ${wide ? 'wide' : ''}` },
-      h('header', {}, h('h2', {}, title), h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close', onclick: () => dlg.close('') }, icon('x'))),
+      h('header', {}, h('h2', {}, title), h('button', { type: 'button', class: 'icon-btn', 'aria-label': t('Close'), onclick: () => dlg.close('') }, icon('x'))),
     );
     form.append(h('div', { class: 'modal-body' }, body));
     const footer = h('footer', {});
@@ -174,18 +177,18 @@ export function modal({ title, body, buttons = [{ label: 'Close', value: null }]
   });
 }
 
-export async function confirmDialog(title, message, okLabel = 'OK', danger = false) {
-  const v = await modal({ title, body: h('p', {}, message), buttons: [{ label: 'Cancel', value: null }, { label: okLabel, value: 'ok', primary: true, danger }] });
+export async function confirmDialog(title, message, okLabel = t('OK'), danger = false) {
+  const v = await modal({ title, body: h('p', {}, message), buttons: [{ label: t('Cancel'), value: null }, { label: okLabel, value: 'ok', primary: true, danger }] });
   return v === 'ok';
 }
 
-export async function promptDialog(title, label, initial = '', okLabel = 'OK') {
+export async function promptDialog(title, label, initial = '', okLabel = t('OK')) {
   const input = h('input', { type: 'text', value: initial, required: true, 'aria-label': label });
   // Pre-select the base name (without extension) when renaming files.
   const v = await modal({
     title,
     body: h('label', { class: 'field' }, h('span', {}, label), input),
-    buttons: [{ label: 'Cancel', value: null }, { label: okLabel, value: 'ok', primary: true }],
+    buttons: [{ label: t('Cancel'), value: null }, { label: okLabel, value: 'ok', primary: true }],
   });
   return v === 'ok' ? input.value.trim() : null;
 }
@@ -212,7 +215,9 @@ export function showMenu(anchor, items) {
   const r = anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y };
   const mw = menu.offsetWidth;
   const mh = menu.offsetHeight;
-  let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+  // Opens towards the reading direction's start: under the anchor's right edge (left edge in RTL).
+  const rtl = document.documentElement.dir === 'rtl';
+  let left = Math.min(rtl ? r.left : r.right - mw, window.innerWidth - mw - 8);
   if (left < 8) left = Math.min(r.left, window.innerWidth - mw - 8);
   let top = r.bottom + 4;
   if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 4);
@@ -223,5 +228,5 @@ export function showMenu(anchor, items) {
 }
 
 export function copyText(text) {
-  navigator.clipboard?.writeText(text).then(() => toast('Copied to clipboard'), () => promptDialog('Copy this', 'Text', text));
+  navigator.clipboard?.writeText(text).then(() => toast(t('Copied to clipboard')), () => promptDialog(t('Copy this'), t('Text'), text));
 }

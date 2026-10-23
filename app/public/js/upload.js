@@ -1,6 +1,7 @@
 // Resumable chunked uploads with a progress panel. Works for logged-in users and public links.
 import { api, xhrPut, ApiError } from './api.js';
 import { h, icon, formatSize, toast } from './ui.js';
+import { t } from './i18n.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let panel = null;
@@ -8,8 +9,8 @@ let active = 0;
 
 function getPanel() {
   if (panel && document.body.contains(panel)) return panel;
-  panel = h('section', { class: 'upload-panel', 'aria-label': 'Uploads' },
-    h('header', {}, h('strong', {}, 'Uploads'), h('button', { class: 'icon-btn', 'aria-label': 'Hide', onclick: () => panel.remove() }, icon('x'))),
+  panel = h('section', { class: 'upload-panel', 'aria-label': t('Uploads') },
+    h('header', {}, h('strong', {}, t('Uploads')), h('button', { class: 'icon-btn', 'aria-label': t('Hide'), onclick: () => panel.remove() }, icon('x'))),
     h('ul', {}),
   );
   document.body.append(panel);
@@ -85,7 +86,7 @@ export async function uploadAll(items, target, onFinished) {
   const rows = items.map(({ file, path }) => {
     const bar = h('progress', { max: 100, value: 0 });
     const status = h('span', { class: 'muted' }, formatSize(file.size));
-    const cancel = h('button', { class: 'icon-btn', 'aria-label': 'Cancel' }, icon('x'));
+    const cancel = h('button', { class: 'icon-btn', 'aria-label': t('Cancel') }, icon('x'));
     const li = h('li', {}, h('div', { class: 'up-name', title: [...path, file.name].join('/') }, file.name), status, cancel, bar);
     ul.prepend(li);
     return { file, path, li, bar, status, cancel, cancelled: false, current: null };
@@ -102,19 +103,19 @@ export async function uploadAll(items, target, onFinished) {
       const parentId = await folderFor(row.path);
       await uploadOne(row, target.startUrl, parentId);
       row.bar.value = 100;
-      row.status.textContent = 'Done';
+      row.status.textContent = t('Done');
       row.li.classList.add('done');
       row.cancel.remove();
     } catch (e) {
       failures++;
       row.li.classList.add('failed');
-      row.status.textContent = row.cancelled ? 'Cancelled' : e.message;
+      row.status.textContent = row.cancelled ? t('Cancelled') : t(e.message);
       row.cancel.remove();
     }
     active--;
   }
-  if (failures) toast(`${failures} upload(s) failed`, 'error');
-  else toast(`Uploaded ${rows.length} file(s)`);
+  if (failures) toast(t('{n} upload(s) failed', { n: failures }), 'error');
+  else toast(t('Uploaded {n} file(s)', { n: rows.length }));
   if (onFinished) onFinished();
   if (!active) setTimeout(() => { if (!active && panel) panel.querySelectorAll('li.done').forEach((li) => li.remove()); }, 4000);
 }
@@ -142,7 +143,7 @@ async function uploadOne(row, startUrl, parentId) {
       if (row.cancelled) continue;
       const fatal = e.status >= 400 && e.status < 500 && e.status !== 409 && e.status !== 408;
       if (fatal || ++errors > 6) throw e;
-      row.status.textContent = 'Retrying…';
+      row.status.textContent = t('Retrying…');
       await sleep(1000 * 2 ** errors);
       offset = (await api('GET', `/api/uploads/${session.id}`)).received;
       continue;

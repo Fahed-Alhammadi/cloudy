@@ -1,6 +1,10 @@
 package io.cloudy.app.data
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -11,6 +15,7 @@ import java.io.File
  *   files/<nodeId>/<name>     downloaded content
  *   dirs/<nodeId>.json        cached folder listing (for browsing without network)
  *   state.json                pinned ids + etag and details of each downloaded file (to open it offline)
+ * Disk work runs on Dispatchers.IO, one change at a time ([lock]); the getters only read the in-memory state.
  */
 class Offline(context: Context, private val api: Api) {
     private val root = File(context.filesDir, "offline")
@@ -24,7 +29,9 @@ class Offline(context: Context, private val api: Api) {
     )
 
     private val stateFile = File(root, "state.json")
-    private var state: State = runCatching { json.decodeFromString<State>(stateFile.readText()) }.getOrDefault(State())
+    // Read once at startup (a small file); afterwards only the in-memory copy is read on the UI thread.
+    @Volatile private var state: State = runCatching { json.decodeFromString<State>(stateFile.readText()) }.getOrDefault(State())
+    private val lock = Mutex()
 
     private fun save() {
         root.mkdirs()
@@ -34,8 +41,9 @@ class Offline(context: Context, private val api: Api) {
     fun isPinned(id: Long) = id in state.pinned
     val pinned: Set<Long> get() = state.pinned
 
+    // The in-memory check comes first, so files that aren't offline never touch the disk (called while drawing lists).
     fun localFile(node: FileNode): File? =
-        File(root, "files/${node.id}/${node.name}").takeIf { it.exists() && state.etags[node.id] == node.etag }
+        if (state.etags[node.id] != node.etag) null else File(root, "files/${node.id}/${node.name}").takeIf { it.exists() }
 
     /** The node as last seen online, if its content is on the device: lets the app open it without network. */
     fun savedNode(id: Long): FileNode? = state.nodes[id]?.takeIf { localFile(it) != null }
@@ -54,19 +62,23 @@ class Offline(context: Context, private val api: Api) {
     }
 
     suspend fun pin(node: FileNode) {
-        state = state.copy(pinned = state.pinned + node.id)
-        save()
+        io {
+            state = state.copy(pinned = state.pinned + node.id)
+            save()
+        }
         sync()
     }
 
-    fun unpin(id: Long) {
+    suspend fun unpin(id: Long) = io {
         state = state.copy(pinned = state.pinned - id)
         save()
         cleanup()
     }
 
+    private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { lock.withLock { block() } }
+
     /** Downloads everything pinned that changed on the server. Returns the number of files fetched. */
-    suspend fun sync(onProgress: (String) -> Unit = {}): Int {
+    suspend fun sync(onProgress: (String) -> Unit = {}): Int = io {
         var fetched = 0
         val keep = mutableSetOf<Long>()
         suspend fun visit(id: Long) {
@@ -93,7 +105,7 @@ class Offline(context: Context, private val api: Api) {
         }
         save()
         cleanup(keep)
-        return fetched
+        fetched
     }
 
     private suspend fun fetchFile(n: FileNode, keep: MutableSet<Long>): File? {
@@ -124,5 +136,6 @@ class Offline(context: Context, private val api: Api) {
         save()
     }
 
+    /** Walks the whole offline folder: call from a background thread. */
     fun usedBytes(): Long = File(root, "files").walkBottomUp().filter { it.isFile }.sumOf { it.length() }
 }

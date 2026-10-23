@@ -36,7 +36,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import io.cloudy.app.R
 import io.cloudy.app.Services
+import androidx.compose.ui.res.stringResource
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.material3.TextButton
@@ -69,7 +71,7 @@ fun LoginScreen() {
             } catch (e: io.cloudy.app.data.ApiException) {
                 if (e.twoFactor && !needCode) needCode = true else error = e.message
             } catch (e: Exception) {
-                error = "Cannot reach server: ${e.message}"
+                error = context.getString(R.string.login_cannot_reach, e.message ?: "")
             } finally {
                 busy = false
             }
@@ -87,31 +89,31 @@ fun LoginScreen() {
                     Icon(Icons.Filled.Cloud, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp))
                     Text("  Cloudy", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
-                OutlinedTextField(server, { server = it }, label = { Text("Server address") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(server, { server = it }, label = { Text(stringResource(R.string.login_server)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next))
-                OutlinedTextField(user, { user = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(user, { user = it }, label = { Text(stringResource(R.string.username)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
-                OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.login_password)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
                     keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (!busy) submit() }))
                 if (needCode) {
-                    OutlinedTextField(code, { code = it }, label = { Text("Authentication code") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        supportingText = { Text("From your authenticator app, or a recovery code") },
+                    OutlinedTextField(code, { code = it }, label = { Text(stringResource(R.string.login_code)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        supportingText = { Text(stringResource(R.string.login_code_hint)) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Go),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { if (!busy) submit() }))
                 }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Button(onClick = ::submit, enabled = !busy && user.isNotBlank() && password.isNotEmpty() && server.length > 8, modifier = Modifier.fillMaxWidth()) {
-                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text("Log in")
+                    if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Text(stringResource(R.string.login_button))
                 }
                 // Password reset by email happens on the web (the link in the email opens the browser anyway).
                 TextButton(enabled = server.length > 8, onClick = {
                     var url = server.trim().trimEnd('/')
                     if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$url/#/forgot"))) }
-                }, modifier = Modifier.align(Alignment.End)) { Text("Forgot password?") }
-                Text("Your password is exchanged for a device token, visible under Settings → App passwords on the web.",
+                }, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.login_forgot)) }
+                Text(stringResource(R.string.login_token_note),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
         }

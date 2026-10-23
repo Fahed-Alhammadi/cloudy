@@ -84,6 +84,10 @@ class Api(private val session: Session) {
 
     suspend fun logout() { runCatching { send("POST", "/api/auth/revoke") } }
     suspend fun me(): User = decode(send("GET", "/api/me"))
+    /** Saves the account's language (null = automatic), so the web app and emails follow it. */
+    suspend fun setLanguage(code: String?) { sendJson("PATCH", "/api/me", buildJsonObject { put("language", code) }) }
+    suspend fun appPasswords(): List<AppPassword> = decode(send("GET", "/api/me/app-passwords"))
+    suspend fun revokeAppPassword(id: Long) { send("DELETE", "/api/me/app-passwords/$id") }
 
     // ---------------------------------------------------------------- files
     suspend fun node(id: Long): NodeListing = decode(send("GET", "/api/nodes/$id"))
@@ -108,10 +112,14 @@ class Api(private val session: Session) {
 
     // ---------------------------------------------------------------- shares
     suspend fun shares(nodeId: Long): List<Share> = decode(send("GET", "/api/nodes/$nodeId/shares"))
-    suspend fun createLink(nodeId: Long, password: String?): Share = decode(sendJson("POST", "/api/nodes/$nodeId/shares", buildJsonObject {
-        put("type", "link")
-        if (!password.isNullOrBlank()) put("password", password)
-    }))
+    /** [expiresAt]: last day the link works (YYYY-MM-DD); [canEdit]: visitors may upload (folders only). */
+    suspend fun createLink(nodeId: Long, password: String?, expiresAt: String? = null, canEdit: Boolean = false): Share =
+        decode(sendJson("POST", "/api/nodes/$nodeId/shares", buildJsonObject {
+            put("type", "link")
+            if (!password.isNullOrBlank()) put("password", password)
+            if (expiresAt != null) put("expiresAt", "${expiresAt}T23:59:59")
+            if (canEdit) put("canEdit", true)
+        }))
     suspend fun shareWith(nodeId: Long, target: String, canEdit: Boolean): Share {
         val group = target.startsWith("group:")
         return decode(sendJson("POST", "/api/nodes/$nodeId/shares", buildJsonObject {

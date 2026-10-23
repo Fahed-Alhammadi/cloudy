@@ -93,8 +93,17 @@ import androidx.core.content.FileProvider
 import androidx.navigation.NavController
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import io.cloudy.app.R
 import io.cloudy.app.Services
 import io.cloudy.app.data.ApiException
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material3.Switch
+import android.app.DatePickerDialog
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import io.cloudy.app.data.FileNode
 import io.cloudy.app.data.NodeListing
 import io.cloudy.app.data.Live
@@ -132,26 +141,29 @@ fun queryName(context: Context, uri: Uri): Pair<String, Long> {
     return name to size
 }
 
-suspend fun uploadUris(context: Context, parentId: Long, uris: List<Uri>, state: UploadState): Int {
+/** [nameFor] can rename an item (e.g. a scan saved under the name the user typed). */
+suspend fun uploadUris(context: Context, parentId: Long, uris: List<Uri>, state: UploadState, nameFor: (Uri) -> String? = { null }): Int {
     var ok = 0
     state.remaining = uris.size
     for (uri in uris) {
-        val (name, knownSize) = queryName(context, uri)
+        // Content-provider queries and copies can take seconds (cloud-backed pickers): never on the UI thread.
+        val (queried, knownSize) = withContext(Dispatchers.IO) { queryName(context, uri) }
+        val name = nameFor(uri) ?: queried
         state.name = name
         state.progress = 0f
         try {
             // Unknown size: copy to cache first so the server gets an exact length.
-            var source: () -> java.io.InputStream = { context.contentResolver.openInputStream(uri) ?: throw IOException("Cannot read $name") }
+            var source: () -> java.io.InputStream = { context.contentResolver.openInputStream(uri) ?: throw IOException(context.getString(R.string.cannot_read, name)) }
             var size = knownSize
             var temp: File? = null
             if (size < 0) {
                 temp = File(context.cacheDir, "up-${System.nanoTime()}")
-                source().use { i -> temp.outputStream().use { i.copyTo(it) } }
-                size = temp.length()
+                val open = source
+                size = withContext(Dispatchers.IO) { open().use { i -> temp.outputStream().use { i.copyTo(it) } }; temp.length() }
                 source = { temp.inputStream() }
             }
             Services.api.upload(parentId, name, size, source) { sent -> state.progress = if (size > 0) sent.toFloat() / size else 1f }
-            temp?.delete()
+            temp?.let { withContext(Dispatchers.IO) { it.delete() } }
             ok++
         } catch (e: Exception) {
             toast(context, "$name: ${e.message}")
@@ -164,10 +176,13 @@ suspend fun uploadUris(context: Context, parentId: Long, uris: List<Uri>, state:
 
 /** The file on the device for handing to another app: the offline copy, or a download into the cache. */
 private suspend fun localCopy(context: Context, node: FileNode): Uri {
-    val file = Services.offline.localFile(node) ?: File(context.cacheDir, "open/${node.id}-${node.etag}/${node.name}").also {
-        if (!it.exists()) {
-            if (node.size > 5_000_000) toast(context, "Downloading ${node.name}…")
-            it.parentFile?.parentFile?.listFiles()?.filter { d -> d.name.startsWith("${node.id}-") }?.forEach { d -> d.deleteRecursively() }
+    val offline = withContext(Dispatchers.IO) { Services.offline.localFile(node) }
+    val file = offline ?: File(context.cacheDir, "open/${node.id}-${node.etag}/${node.name}").also {
+        if (!withContext(Dispatchers.IO) { it.exists() }) {
+            if (node.size > 5_000_000) toast(context, context.getString(R.string.downloading_name, node.name))
+            withContext(Dispatchers.IO) {
+                it.parentFile?.parentFile?.listFiles()?.filter { d -> d.name.startsWith("${node.id}-") }?.forEach { d -> d.deleteRecursively() }
+            }
             Services.api.download(node.id, it)
         }
     }
@@ -181,7 +196,7 @@ suspend fun sendToApp(context: Context, node: FileNode) {
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         .apply { clipData = ClipData.newRawUri(node.name, uri) } // grants read access to the chosen app
-    context.startActivity(Intent.createChooser(intent, "Send ${node.name}"))
+    context.startActivity(Intent.createChooser(intent, context.getString(R.string.send_name, node.name)))
 }
 
 /** Downloads (or reuses the offline copy) and opens a file in another app. */
@@ -189,9 +204,9 @@ suspend fun openExternally(context: Context, node: FileNode) {
     val uri = localCopy(context, node)
     val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, node.mime.ifEmpty { "*/*" }).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     try {
-        context.startActivity(Intent.createChooser(intent, "Open with"))
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.open_with)))
     } catch (_: ActivityNotFoundException) {
-        toast(context, "No app can open this file")
+        toast(context, context.getString(R.string.no_app_can_open))
     }
 }
 
@@ -210,6 +225,10 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
     var menuOpen by remember { mutableStateOf(false) }
     var newFolder by remember { mutableStateOf(false) }
     var newTextFile by remember { mutableStateOf(false) }
+    var scanned by remember { mutableStateOf<Uri?>(null) } // a scanned PDF waiting for its name
+    val viewPrefs = remember { ViewPrefs(context) }
+    var grid by remember { mutableStateOf(viewPrefs.grid) }
+    var sort by remember { mutableStateOf(viewPrefs.sort) }
     val uploads = remember { UploadState() }
     val snackbar = remember { SnackbarHostState() }
 
@@ -225,7 +244,7 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
             error = e.message
         } catch (e: IOException) {
             val cached = withContext(Dispatchers.IO) { Services.offline.cachedListing(folderId) }
-            if (cached != null) { listing = cached; offlineMode = true } else error = "Offline: ${e.message}"
+            if (cached != null) { listing = cached; offlineMode = true } else error = context.getString(R.string.offline_error, e.message ?: "")
         }
     }
     LaunchedEffect(folderId) { load() }
@@ -234,43 +253,50 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
     val reload: () -> Unit = { scope.launch { load() } }
     val canEdit = listing?.perm != "read" && !offlineMode
 
-    fun startUpload(uris: List<Uri>) {
+    fun startUpload(uris: List<Uri>, nameFor: (Uri) -> String? = { null }) {
         if (uris.isEmpty()) return
         scope.launch {
-            val n = uploadUris(context, folderId, uris, uploads)
-            snackbar.showSnackbar("Uploaded $n of ${uris.size} file(s)")
+            val n = uploadUris(context, folderId, uris, uploads, nameFor)
+            snackbar.showSnackbar(context.getString(R.string.uploaded_n_of_m, n, uris.size))
             load()
         }
     }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { startUpload(it) }
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { startUpload(it) }
+    val scan = rememberDocumentScanner { scanned = it }
 
     val known = listing?.node ?: ListCache.node(folderId)
-    val title = known?.let { n -> if (n.parentId == null) "Files" else n.name } ?: ""
+    val title = known?.let { n -> if (n.parentId == null) stringResource(R.string.tab_files) else n.name } ?: ""
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    if (known?.parentId != null) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                    if (known?.parentId != null) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
                 },
-                actions = { IconButton(onClick = { nav.navigate("search") }) { Icon(Icons.Outlined.Search, "Search") } },
+                actions = {
+                    IconButton(onClick = { nav.navigate("search") }) { Icon(Icons.Outlined.Search, stringResource(R.string.search)) }
+                    ViewActions(grid, sort, onGrid = { grid = it; viewPrefs.grid = it }, onSort = { sort = it; viewPrefs.sort = it })
+                },
             )
         },
         floatingActionButton = {
             if (canEdit) Box {
-                FloatingActionButton(onClick = { menuOpen = true }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "Add") }
+                FloatingActionButton(onClick = { menuOpen = true }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, stringResource(R.string.add)) }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
-                    DropdownMenuItem({ Text("Upload photos & videos") }, leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = {
+                    DropdownMenuItem({ Text(stringResource(R.string.upload_media)) }, leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = {
                         menuOpen = false; pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                     })
-                    DropdownMenuItem({ Text("Upload files") }, leadingIcon = { Icon(Icons.Outlined.UploadFile, null) }, onClick = {
+                    DropdownMenuItem({ Text(stringResource(R.string.upload_files)) }, leadingIcon = { Icon(Icons.Outlined.UploadFile, null) }, onClick = {
                         menuOpen = false; pickFiles.launch(arrayOf("*/*"))
                     })
-                    DropdownMenuItem({ Text("New folder") }, leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) }, onClick = {
+                    DropdownMenuItem({ Text(stringResource(R.string.scan_document)) }, leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) }, onClick = {
+                        menuOpen = false; scan()
+                    })
+                    DropdownMenuItem({ Text(stringResource(R.string.new_folder)) }, leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) }, onClick = {
                         menuOpen = false; newFolder = true
                     })
-                    DropdownMenuItem({ Text("New text file") }, leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) }, onClick = {
+                    DropdownMenuItem({ Text(stringResource(R.string.new_text_file)) }, leadingIcon = { Icon(Icons.Outlined.NoteAdd, null) }, onClick = {
                         menuOpen = false; newTextFile = true
                     })
                 }
@@ -279,24 +305,24 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            if (offlineMode) Text("Offline — showing saved copy", Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            if (offlineMode) Text(stringResource(R.string.offline_mode), Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
-            if (listing?.perm == "read") Text("Read-only shared folder", Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            if (listing?.perm == "read") Text(stringResource(R.string.read_only_folder), Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
             uploads.name?.let { name ->
                 Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text("Uploading $name (${uploads.remaining} left)", style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.uploading_name, name, uploads.remaining), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     LinearProgressIndicator(progress = { uploads.progress }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
             }
             if (sharedUris.value.isNotEmpty() && canEdit) {
                 ListItem(
-                    headlineContent = { Text("Upload ${sharedUris.value.size} shared item(s) here") },
+                    headlineContent = { Text(stringResource(R.string.upload_shared_here, sharedUris.value.size)) },
                     leadingContent = { Icon(Icons.Outlined.UploadFile, null) },
                     trailingContent = {
                         Row {
-                            TextButton(onClick = { sharedUris.value = emptyList() }) { Text("Dismiss") }
-                            TextButton(onClick = { val u = sharedUris.value; sharedUris.value = emptyList(); startUpload(u) }) { Text("Upload") }
+                            TextButton(onClick = { sharedUris.value = emptyList() }) { Text(stringResource(R.string.dismiss)) }
+                            TextButton(onClick = { val u = sharedUris.value; sharedUris.value = emptyList(); startUpload(u) }) { Text(stringResource(R.string.upload)) }
                         }
                     },
                 )
@@ -306,23 +332,31 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
                 when {
                     error != null && l == null -> EmptyState(Icons.Outlined.CloudOff, error!!)
                     l == null -> Loading()
-                    l.children.isNullOrEmpty() -> EmptyState(Icons.Outlined.FolderOpen, if (canEdit) "Empty folder — tap + to upload" else "Empty folder")
-                    else -> NodeList(l.children!!, nav, canModify = { canEdit }, reload = reload, scope = scope)
+                    l.children.isNullOrEmpty() -> EmptyState(Icons.Outlined.FolderOpen, stringResource(if (canEdit) R.string.empty_folder_tap else R.string.empty_folder))
+                    else -> NodeList(sortNodes(l.children!!, sort), nav, canModify = { canEdit }, reload = reload, scope = scope, grid = grid)
                 }
             }
         }
     }
-    if (newFolder) TextPrompt("New folder", "New folder", confirm = "Create", onDismiss = { newFolder = false }) { name ->
+    if (newFolder) TextPrompt(stringResource(R.string.new_folder), stringResource(R.string.new_folder), confirm = stringResource(R.string.create), onDismiss = { newFolder = false }) { name ->
         newFolder = false
-        scope.launch { runCatching { Services.api.mkdir(folderId, name) }.onFailure { toast(context, it.message ?: "Failed") }; load() }
+        scope.launch { runCatching { Services.api.mkdir(folderId, name) }.onFailure { toast(context, it.message ?: context.getString(R.string.failed)) }; load() }
     }
-    if (newTextFile) TextPrompt("New text file", "Notes.txt", confirm = "Create", onDismiss = { newTextFile = false }) { name ->
+    scanned?.let { pdf ->
+        val stamp = remember { LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH.mm")) }
+        TextPrompt(stringResource(R.string.scan_save_title), stringResource(R.string.scan_default_name, stamp), confirm = stringResource(R.string.upload),
+            onDismiss = { scanned = null }) { name ->
+            scanned = null
+            startUpload(listOf(pdf)) { if (name.endsWith(".pdf", ignoreCase = true)) name else "$name.pdf" }
+        }
+    }
+    if (newTextFile) TextPrompt(stringResource(R.string.new_text_file), "Notes.txt", confirm = stringResource(R.string.create), onDismiss = { newTextFile = false }) { name ->
         newTextFile = false
         val fileName = if ('.' in name) name else "$name.txt"
         scope.launch {
             runCatching { Services.api.createTextFile(folderId, fileName) }
                 .onSuccess { load(); nav.navigate("preview/${it.id}") }
-                .onFailure { toast(context, it.message ?: "Failed") }
+                .onFailure { toast(context, it.message ?: context.getString(R.string.failed)) }
         }
     }
 }
@@ -344,9 +378,11 @@ fun NodeList(
     reload: () -> Unit,
     scope: CoroutineScope,
     subtitle: (FileNode) -> String? = { null },
+    grid: Boolean = false,
 ) {
     var sheetFor by remember { mutableStateOf<FileNode?>(null) }
-    LazyColumn(Modifier.fillMaxSize()) {
+    if (grid) NodeGrid(items, onOpen = { openNode(nav, it) }, onActions = { sheetFor = it })
+    else LazyColumn(Modifier.fillMaxSize()) {
         items(items, key = { it.id }) { node ->
             ListItem(
                 modifier = Modifier.clickable { openNode(nav, node) },
@@ -359,9 +395,9 @@ fun NodeList(
                 trailingContent = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (node.favorite) Icon(Icons.Filled.Star, null, tint = androidx.compose.ui.graphics.Color(0xFFE5A50A), modifier = Modifier.size(16.dp))
-                        if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, "Available offline", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                        if (node.shared) Icon(Icons.Outlined.Share, "Shared", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                        IconButton(onClick = { sheetFor = node }) { Icon(Icons.Outlined.MoreVert, "Actions for ${node.name}") }
+                        if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, stringResource(R.string.available_offline), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                        if (node.shared) Icon(Icons.Outlined.Share, stringResource(R.string.shared), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                        IconButton(onClick = { sheetFor = node }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.actions_for, node.name)) }
                     }
                 },
             )
@@ -382,17 +418,19 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
             try {
                 val tmp = File(context.cacheDir, "save-${node.id}")
                 Services.api.download(node.id, tmp)
-                context.contentResolver.openOutputStream(uri)?.use { out -> tmp.inputStream().use { it.copyTo(out) } }
-                tmp.delete()
-                toast(context, "Saved")
-            } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { out -> tmp.inputStream().use { it.copyTo(out) } }
+                    tmp.delete()
+                }
+                toast(context, context.getString(R.string.saved))
+            } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)) }
         }
     }
 
     fun act(block: suspend () -> Unit) {
         onClose()
         scope.launch {
-            try { block() } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+            try { block() } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)) }
             reload()
         }
     }
@@ -401,39 +439,40 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
         Text(node.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp), maxLines = 2)
         HorizontalDivider()
         @Composable
-        fun Item(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, danger: Boolean = false, onClick: () -> Unit) =
+        fun Item(label: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, danger: Boolean = false, onClick: () -> Unit) =
             ListItem(
                 modifier = Modifier.clickable(onClick = onClick),
                 leadingContent = { Icon(icon, null, tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) },
-                headlineContent = { Text(label, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
+                headlineContent = { Text(stringResource(label), color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
             )
-        if (!node.isDir) Item("Send to…", Icons.AutoMirrored.Outlined.Send) { onClose(); scope.launch { runCatching { sendToApp(context, node) }.onFailure { toast(context, it.message ?: "Failed") } } }
-        if (!node.isDir) Item("Open with…", Icons.AutoMirrored.Outlined.OpenInNew) { onClose(); scope.launch { runCatching { openExternally(context, node) }.onFailure { toast(context, it.message ?: "Failed") } } }
-        Item(if (node.isDir) "Save as ZIP…" else "Save to device…", Icons.Outlined.Download) { onClose(); saveAs.launch(node.name + if (node.isDir) ".zip" else "") }
-        if (Services.offline.isPinned(node.id)) Item("Remove offline copy", Icons.Outlined.CloudOff) { act { Services.offline.unpin(node.id) } }
-        else Item("Make available offline", Icons.Outlined.DownloadForOffline) { act { Services.offline.pin(node); toast(context, "Available offline") } }
+        val failed = stringResource(R.string.failed)
+        if (!node.isDir) Item(R.string.send_to, Icons.AutoMirrored.Outlined.Send) { onClose(); scope.launch { runCatching { sendToApp(context, node) }.onFailure { toast(context, it.message ?: failed) } } }
+        if (!node.isDir) Item(R.string.open_with, Icons.AutoMirrored.Outlined.OpenInNew) { onClose(); scope.launch { runCatching { openExternally(context, node) }.onFailure { toast(context, it.message ?: failed) } } }
+        Item(if (node.isDir) R.string.save_as_zip else R.string.save_to_device, Icons.Outlined.Download) { onClose(); saveAs.launch(node.name + if (node.isDir) ".zip" else "") }
+        if (Services.offline.isPinned(node.id)) Item(R.string.remove_offline, Icons.Outlined.CloudOff) { act { Services.offline.unpin(node.id) } }
+        else Item(R.string.make_offline, Icons.Outlined.DownloadForOffline) { act { Services.offline.pin(node); toast(context, context.getString(R.string.available_offline)) } }
         if (isOwner) {
-            Item("Share link", Icons.Outlined.Link) { dialog = "link" }
-            Item("Share with people", Icons.Outlined.PersonAdd) { dialog = "people" }
-            if (node.shared) Item("Manage sharing", Icons.Outlined.ManageAccounts) { dialog = "shares" }
+            Item(R.string.share_link, Icons.Outlined.Link) { dialog = "link" }
+            Item(R.string.share_people, Icons.Outlined.PersonAdd) { dialog = "people" }
+            if (node.shared) Item(R.string.manage_sharing, Icons.Outlined.ManageAccounts) { dialog = "shares" }
         }
-        Item(if (node.favorite) "Remove from favorites" else "Add to favorites", if (node.favorite) Icons.Outlined.StarOutline else Icons.Outlined.Star) {
+        Item(if (node.favorite) R.string.remove_favorite else R.string.add_favorite, if (node.favorite) Icons.Outlined.StarOutline else Icons.Outlined.Star) {
             act { Services.api.setFavorite(node.id, !node.favorite) }
         }
         if (canModify) {
-            Item("Rename", Icons.Outlined.Edit) { dialog = "rename" }
-            Item("Move or copy", Icons.AutoMirrored.Outlined.DriveFileMove) { dialog = "move" }
-            Item("Delete", Icons.Outlined.Delete, danger = true) { dialog = "delete" }
+            Item(R.string.rename, Icons.Outlined.Edit) { dialog = "rename" }
+            Item(R.string.move_or_copy, Icons.AutoMirrored.Outlined.DriveFileMove) { dialog = "move" }
+            Item(R.string.delete, Icons.Outlined.Delete, danger = true) { dialog = "delete" }
         }
         node.shareId?.takeIf { node.shareType == "user" }?.let { sid ->
-            Item("Leave share", Icons.Outlined.Delete, danger = true) { act { Services.api.deleteShare(sid) } }
+            Item(R.string.leave_share, Icons.Outlined.Delete, danger = true) { act { Services.api.deleteShare(sid) } }
         }
         Spacer(Modifier.heightIn(min = 24.dp))
     }
 
     when (dialog) {
-        "rename" -> TextPrompt("Rename", node.name, confirm = "Rename", onDismiss = onClose) { name -> act { Services.api.rename(node.id, name) } }
-        "delete" -> ConfirmDialog("Delete", "Move \"${node.name}\" to the trash?", "Delete", onClose) { act { Services.api.delete(node.id) } }
+        "rename" -> TextPrompt(stringResource(R.string.rename), node.name, confirm = stringResource(R.string.rename), onDismiss = onClose) { name -> act { Services.api.rename(node.id, name) } }
+        "delete" -> ConfirmDialog(stringResource(R.string.delete), stringResource(R.string.delete_confirm, node.name), stringResource(R.string.delete), onClose) { act { Services.api.delete(node.id) } }
         "move" -> FolderPicker(node, onDismiss = onClose) { dest, copy -> act { if (copy) Services.api.copy(node.id, dest) else Services.api.move(node.id, dest) } }
         "link" -> LinkDialog(node, onClose)
         "people" -> PeopleDialog(node, onClose)
@@ -449,10 +488,11 @@ fun FolderPicker(node: FileNode, onDismiss: () -> Unit, onPick: (Long, Boolean) 
     LaunchedEffect(current) { listing = runCatching { Services.api.node(current) }.getOrNull() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Move or copy \"${node.name}\"", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(stringResource(R.string.move_copy_title, node.name), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
-                Text(listing?.breadcrumb?.joinToString(" / ") { it.name.ifEmpty { "Files" } } ?: "…", style = MaterialTheme.typography.labelLarge)
+                val files = stringResource(R.string.tab_files)
+                Text(listing?.breadcrumb?.joinToString(" / ") { it.name.ifEmpty { files } } ?: "…", style = MaterialTheme.typography.labelLarge)
                 LazyColumn(Modifier.heightIn(max = 320.dp)) {
                     listing?.node?.parentId?.let { parent ->
                         item { ListItem(modifier = Modifier.clickable { current = parent }, headlineContent = { Text("..") }, leadingContent = { Icon(Icons.Outlined.Folder, null) }) }
@@ -463,11 +503,11 @@ fun FolderPicker(node: FileNode, onDismiss: () -> Unit, onPick: (Long, Boolean) 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onPick(current, false) }) { Text("Move here") } },
+        confirmButton = { TextButton(onClick = { onPick(current, false) }) { Text(stringResource(R.string.move_here)) } },
         dismissButton = {
             Row {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                TextButton(onClick = { onPick(current, true) }) { Text("Copy here") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { onPick(current, true) }) { Text(stringResource(R.string.copy_here)) }
             }
         },
     )
@@ -478,14 +518,32 @@ fun LinkDialog(node: FileNode, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var password by remember { mutableStateOf("") }
+    var expires by remember { mutableStateOf<LocalDate?>(null) } // last day the link works
+    var allowUpload by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Share link") },
+        title = { Text(stringResource(R.string.share_link)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Anyone with the link can open \"${node.name}\".")
-                OutlinedTextField(password, { password = it }, label = { Text("Password (optional)") }, singleLine = true)
+                Text(stringResource(R.string.link_anyone, node.name))
+                OutlinedTextField(password, { password = it }, label = { Text(stringResource(R.string.link_password)) }, singleLine = true)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        val d = expires ?: LocalDate.now().plusDays(7)
+                        DatePickerDialog(context, { _, y, m, dd -> expires = LocalDate.of(y, m + 1, dd) }, d.year, d.monthValue - 1, d.dayOfMonth)
+                            .apply { datePicker.minDate = System.currentTimeMillis() }.show()
+                    }) {
+                        Text(expires?.let { stringResource(R.string.link_expires_on, it.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))) }
+                            ?: stringResource(R.string.link_expires_never))
+                    }
+                    if (expires != null) IconButton(onClick = { expires = null }) { Icon(Icons.Outlined.LinkOff, stringResource(R.string.link_remove_expiry)) }
+                }
+                // Public upload into shared folders (a "file drop"); files can't take uploads.
+                if (node.isDir) Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.link_allow_upload), Modifier.weight(1f))
+                    Switch(allowUpload, { allowUpload = it })
+                }
             }
         },
         confirmButton = {
@@ -493,14 +551,14 @@ fun LinkDialog(node: FileNode, onDismiss: () -> Unit) {
                 busy = true
                 scope.launch {
                     try {
-                        val s = Services.api.createLink(node.id, password)
+                        val s = Services.api.createLink(node.id, password, expires?.toString(), allowUpload && node.isDir)
                         shareText(context, Services.api.url(s.url ?: ""))
                         onDismiss()
-                    } catch (e: Exception) { toast(context, e.message ?: "Failed"); busy = false }
+                    } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)); busy = false }
                 }
-            }) { Text("Create & share") }
+            }) { Text(stringResource(R.string.create_and_share)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -511,33 +569,33 @@ fun SharesDialog(node: FileNode, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var shares by remember { mutableStateOf<List<Share>?>(null) }
     var stopping by remember { mutableStateOf<Share?>(null) }
-    suspend fun load() { shares = runCatching { Services.api.shares(node.id) }.getOrElse { toast(context, it.message ?: "Failed"); emptyList() } }
+    suspend fun load() { shares = runCatching { Services.api.shares(node.id) }.getOrElse { toast(context, it.message ?: context.getString(R.string.failed)); emptyList() } }
     LaunchedEffect(node.id) { load() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sharing \"${node.name}\"", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(stringResource(R.string.sharing_title, node.name), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
             val list = shares
             when {
                 list == null -> Loading()
-                list.isEmpty() -> Text("Not shared any more.")
+                list.isEmpty() -> Text(stringResource(R.string.not_shared_anymore))
                 else -> Column(Modifier.verticalScroll(rememberScrollState())) {
                     list.forEach { sh ->
                         val link = sh.type == "link"
                         ListItem(
                             leadingContent = { Icon(if (link) Icons.Outlined.Link else Icons.Outlined.PersonAdd, null) },
-                            headlineContent = { Text(if (link) "Public link" else (sh.shareWith ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            headlineContent = { Text(if (link) stringResource(R.string.public_link) else (sh.shareWith ?: ""), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             supportingContent = {
                                 Text(listOfNotNull(
-                                    if (sh.canEdit) "can edit" else if (link) null else "read only",
-                                    if (sh.hasPassword) "password" else null,
-                                    sh.expiresAt?.let { "expires ${formatDate(it)}" },
-                                ).joinToString(" · ").ifEmpty { "anyone with the link" })
+                                    if (sh.canEdit) stringResource(R.string.share_can_edit) else if (link) null else stringResource(R.string.share_read_only),
+                                    if (sh.hasPassword) stringResource(R.string.share_password) else null,
+                                    sh.expiresAt?.let { stringResource(R.string.share_expires, formatDate(it)) },
+                                ).joinToString(" · ").ifEmpty { stringResource(R.string.share_anyone) })
                             },
                             trailingContent = {
                                 Row {
-                                    if (link && sh.url != null) IconButton(onClick = { shareText(context, Services.api.url(sh.url)) }) { Icon(Icons.Outlined.Share, "Send link") }
-                                    IconButton(onClick = { stopping = sh }) { Icon(Icons.Outlined.LinkOff, "Stop sharing", tint = MaterialTheme.colorScheme.error) }
+                                    if (link && sh.url != null) IconButton(onClick = { shareText(context, Services.api.url(sh.url)) }) { Icon(Icons.Outlined.Share, stringResource(R.string.send_link)) }
+                                    IconButton(onClick = { stopping = sh }) { Icon(Icons.Outlined.LinkOff, stringResource(R.string.stop_sharing), tint = MaterialTheme.colorScheme.error) }
                                 }
                             },
                         )
@@ -545,15 +603,15 @@ fun SharesDialog(node: FileNode, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.done)) } },
     )
     stopping?.let { sh ->
-        ConfirmDialog("Stop sharing",
-            if (sh.type == "link") "The link stops working for everyone who has it." else "${sh.shareWith} loses access to \"${node.name}\".",
-            "Stop sharing", { stopping = null }) {
+        ConfirmDialog(stringResource(R.string.stop_sharing),
+            if (sh.type == "link") stringResource(R.string.stop_link_text) else stringResource(R.string.stop_user_text, sh.shareWith ?: "", node.name),
+            stringResource(R.string.stop_sharing), { stopping = null }) {
             stopping = null
             scope.launch {
-                runCatching { Services.api.deleteShare(sh.id) }.onFailure { toast(context, it.message ?: "Failed") }
+                runCatching { Services.api.deleteShare(sh.id) }.onFailure { toast(context, it.message ?: context.getString(R.string.failed)) }
                 load()
             }
         }
@@ -569,32 +627,32 @@ fun PeopleDialog(node: FileNode, onDismiss: () -> Unit) {
     var suggestions by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     LaunchedEffect(target) {
         if (target.length >= 1) runCatching { Services.api.sharees(target.removePrefix("group:")) }.onSuccess { s ->
-            suggestions = s.users.map { it.id to it.displayName } + s.groups.map { "group:${it.id}" to "Group ${it.id}" }
+            suggestions = s.users.map { it.id to it.displayName } + s.groups.map { "group:${it.id}" to context.getString(R.string.group_name, it.id) }
         }
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Share with people") },
+        title = { Text(stringResource(R.string.share_people)) },
         text = {
             Column {
-                OutlinedTextField(target, { target = it }, label = { Text("Username or group:name") }, singleLine = true)
+                OutlinedTextField(target, { target = it }, label = { Text(stringResource(R.string.username_or_group)) }, singleLine = true)
                 suggestions.take(5).forEach { (id, label) ->
                     Text("$label ($id)", Modifier.fillMaxWidth().clickable { target = id }.padding(vertical = 8.dp))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(canEdit, { canEdit = it }); Text("Can edit")
+                    Checkbox(canEdit, { canEdit = it }); Text(stringResource(R.string.can_edit))
                 }
             }
         },
         confirmButton = {
             TextButton(enabled = target.isNotBlank(), onClick = {
                 scope.launch {
-                    try { Services.api.shareWith(node.id, target.trim(), canEdit); toast(context, "Shared"); onDismiss() }
-                    catch (e: Exception) { toast(context, e.message ?: "Failed") }
+                    try { Services.api.shareWith(node.id, target.trim(), canEdit); toast(context, context.getString(R.string.shared_toast)); onDismiss() }
+                    catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)) }
                 }
-            }) { Text("Share") }
+            }) { Text(stringResource(R.string.share)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
 
@@ -603,11 +661,14 @@ fun PeopleDialog(node: FileNode, onDismiss: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NodeListScreen(nav: NavController, kind: String) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf(ListCache.list(kind)) }
     var error by remember { mutableStateOf<String?>(null) }
     val me = Services.session.user.value
-    val title = mapOf("recent" to "Recent", "favorites" to "Favorites", "shared-in" to "Shared with you", "shared-out" to "Shared by you", "offline" to "Available offline")[kind] ?: kind
+    val title = mapOf("recent" to R.string.recent, "favorites" to R.string.favorites, "shared-in" to R.string.shared_with_you,
+        "shared-out" to R.string.shared_by_you, "offline" to R.string.available_offline)[kind]?.let { stringResource(it) } ?: kind
+    val linkWord = stringResource(R.string.link_word)
     var outgoing by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
 
     suspend fun load() {
@@ -617,7 +678,7 @@ fun NodeListScreen(nav: NavController, kind: String) {
                 "favorites" -> Services.api.favorites()
                 "shared-in" -> Services.api.sharedWithMe()
                 "shared-out" -> Services.api.sharedByMe().also { list ->
-                    outgoing = list.groupBy { it.nodeId }.mapValues { (_, s) -> s.joinToString { if (it.type == "link") "link" else it.shareWith ?: "" } }
+                    outgoing = list.groupBy { it.nodeId }.mapValues { (_, s) -> s.joinToString { if (it.type == "link") linkWord else it.shareWith ?: "" } }
                 }.mapNotNull { it.node }.distinctBy { it.id }
                 "offline" -> coroutineScope {
                     Services.offline.pinned.map { id ->
@@ -634,18 +695,18 @@ fun NodeListScreen(nav: NavController, kind: String) {
         if (kind != "offline") Live.events.filter { it.folders.isNotEmpty() || it.shares }.collectLatest { delay(400); load() }
     }
     Scaffold(topBar = {
-        TopAppBar(title = { Text(title) }, navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
+        TopAppBar(title = { Text(title) }, navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } })
     }) { pad ->
         Box(Modifier.padding(pad)) {
             val list = items
             when {
                 error != null && list == null -> EmptyState(Icons.Outlined.CloudOff, error!!)
                 list == null -> Loading()
-                list.isEmpty() -> EmptyState(Icons.Outlined.FolderOpen, "Nothing here yet")
+                list.isEmpty() -> EmptyState(Icons.Outlined.FolderOpen, stringResource(R.string.nothing_here))
                 else -> NodeList(list, nav, canModify = { it.owner == me?.id }, reload = { scope.launch { load() } }, scope = scope, subtitle = { n ->
                     when (kind) {
-                        "shared-in" -> "From ${n.ownerName ?: n.owner}" + if (n.canEdit == true) " · can edit" else ""
-                        "shared-out" -> "With ${outgoing[n.id]}"
+                        "shared-in" -> context.getString(if (n.canEdit == true) R.string.from_owner_can_edit else R.string.from_owner, n.ownerName ?: n.owner)
+                        "shared-out" -> context.getString(R.string.with_targets, outgoing[n.id] ?: "")
                         else -> null
                     }
                 })
@@ -660,6 +721,7 @@ fun SearchScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
     var q by rememberSaveable { mutableStateOf("") }
     var results by remember { mutableStateOf<List<FileNode>>(emptyList()) }
+    var filter by rememberSaveable { mutableStateOf(TypeFilter.ALL) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() } // open the keyboard right away
     LaunchedEffect(q) {
@@ -668,13 +730,15 @@ fun SearchScreen(nav: NavController) {
     }
     Scaffold(topBar = {
         TopAppBar(
-            title = { OutlinedTextField(q, { q = it }, placeholder = { Text("Search files") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(end = 8.dp).focusRequester(focus)) },
-            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            title = { OutlinedTextField(q, { q = it }, placeholder = { Text(stringResource(R.string.search_files)) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(end = 8.dp).focusRequester(focus)) },
+            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
         )
     }) { pad ->
-        Box(Modifier.padding(pad)) {
-            if (q.isNotBlank() && results.isEmpty()) EmptyState(Icons.Outlined.Search, "No matches")
-            else NodeList(results, nav, canModify = { true }, reload = {}, scope = scope, subtitle = { it.path })
+        Column(Modifier.padding(pad)) {
+            TypeFilterRow(filter) { filter = it }
+            val shown = results.filter(filter.matches)
+            if (q.isNotBlank() && shown.isEmpty()) EmptyState(Icons.Outlined.Search, stringResource(R.string.no_matches))
+            else NodeList(shown, nav, canModify = { true }, reload = {}, scope = scope, subtitle = { it.path })
         }
     }
 }

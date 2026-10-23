@@ -11,6 +11,19 @@ data class User(
     val quotaBytes: Long? = null,
     val used: Long = 0,
     val rootId: Long = 0,
+    /** Preferred language code (en, ar, de, fr, es); null = follow the phone. Shared with the web app. */
+    val language: String? = null,
+)
+
+/** An app password / device token (Settings → App passwords on the web, More → Devices here). */
+@Serializable
+data class AppPassword(
+    val id: Long,
+    val name: String,
+    val createdAt: String = "",
+    val lastUsedAt: String? = null,
+    /** The token this phone is signed in with. */
+    val current: Boolean = false,
 )
 
 @Serializable

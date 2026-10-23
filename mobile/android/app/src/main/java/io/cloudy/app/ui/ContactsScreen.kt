@@ -1,5 +1,7 @@
 package io.cloudy.app.ui
 
+import io.cloudy.app.R
+import androidx.compose.ui.res.stringResource
 import java.io.File
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -107,13 +109,13 @@ fun ContactsScreen() {
         scope.launch {
             try {
                 val bytes = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Cannot read the file")
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error(context.getString(R.string.cannot_read_file))
                 }
-                if (bytes.size > 20 * 1024 * 1024) error("That file is too large (20 MB at most)")
+                if (bytes.size > 20 * 1024 * 1024) error(context.getString(R.string.file_too_large))
                 importResult = Services.api.importContacts(b.id, bytes)
                 reloadKey++
             } catch (e: Exception) {
-                toast(context, e.message ?: "Import failed")
+                toast(context, e.message ?: context.getString(R.string.import_failed))
             } finally {
                 importing = false
             }
@@ -132,19 +134,19 @@ fun ContactsScreen() {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
                 context.startActivity(Intent.createChooser(
                     Intent(Intent.ACTION_SEND).setType("text/x-vcard").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
-                    "Export contacts"))
+                    context.getString(R.string.export_contacts)))
             } catch (e: Exception) {
-                toast(context, e.message ?: "Export failed")
+                toast(context, e.message ?: context.getString(R.string.export_failed))
             }
         }
     }
 
     LaunchedEffect(Unit) {
         runCatching { Services.api.addressBooks() }.onSuccess { books = it; if (book == null) book = it.firstOrNull() }
-            .onFailure { toast(context, it.message ?: "Failed"); contacts = emptyList() }
+            .onFailure { toast(context, it.message ?: context.getString(R.string.failed)); contacts = emptyList() }
     }
     LaunchedEffect(book, reloadKey) {
-        book?.let { b -> contacts = runCatching { Services.api.contacts(b.id) }.getOrElse { toast(context, it.message ?: "Failed"); emptyList() } }
+        book?.let { b -> contacts = runCatching { Services.api.contacts(b.id) }.getOrElse { toast(context, it.message ?: context.getString(R.string.failed)); emptyList() } }
     }
 
     // After rotation the editor is restored before the address book has reloaded; open it once it has.
@@ -152,7 +154,7 @@ fun ContactsScreen() {
     editing?.takeIf { editBook != null }?.let { c ->
         ContactEditor(c, editBook!!.id, onClose = { editing = null }) { op ->
             scope.launch {
-                try { op(); editing = null; reloadKey++ } catch (e: Exception) { toast(context, e.message ?: "Failed") }
+                try { op(); editing = null; reloadKey++ } catch (e: Exception) { toast(context, e.message ?: context.getString(R.string.failed)) }
             }
         }
         return
@@ -161,16 +163,16 @@ fun ContactsScreen() {
     importResult?.let { r ->
         AlertDialog(
             onDismissRequest = { importResult = null },
-            title = { Text("Import finished") },
+            title = { Text(stringResource(R.string.import_finished)) },
             text = {
                 Text(listOfNotNull(
-                    "${r.imported} new contact(s) added.",
-                    if (r.updated > 0) "${r.updated} existing contact(s) updated." else null,
-                    if (r.duplicates > 0) "${r.duplicates} skipped (already in the address book)." else null,
-                    if (r.skipped > 0) "${r.skipped} could not be read." else null,
+                    stringResource(R.string.import_added, r.imported),
+                    if (r.updated > 0) stringResource(R.string.import_updated, r.updated) else null,
+                    if (r.duplicates > 0) stringResource(R.string.import_duplicates, r.duplicates) else null,
+                    if (r.skipped > 0) stringResource(R.string.import_skipped, r.skipped) else null,
                 ).joinToString("\n"))
             },
-            confirmButton = { TextButton(onClick = { importResult = null }) { Text("OK") } },
+            confirmButton = { TextButton(onClick = { importResult = null }) { Text(stringResource(R.string.ok)) } },
         )
     }
 
@@ -179,7 +181,7 @@ fun ContactsScreen() {
             TopAppBar(title = {
                 Box {
                     TextButton(onClick = { bookMenu = true }) {
-                        Text(book?.name ?: "Contacts", style = MaterialTheme.typography.titleLarge); Icon(Icons.Outlined.ExpandMore, "Choose address book")
+                        Text(book?.name ?: stringResource(R.string.tab_contacts), style = MaterialTheme.typography.titleLarge); Icon(Icons.Outlined.ExpandMore, stringResource(R.string.choose_book))
                     }
                     DropdownMenu(bookMenu, { bookMenu = false }) {
                         books.forEach { b -> DropdownMenuItem({ Text(b.name) }, onClick = { book = b; bookMenu = false }) }
@@ -187,24 +189,24 @@ fun ContactsScreen() {
                 }
             }, actions = {
                 if (book != null) Box {
-                    IconButton(onClick = { moreMenu = true }) { Icon(Icons.Outlined.MoreVert, "More") }
+                    IconButton(onClick = { moreMenu = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.more)) }
                     DropdownMenu(moreMenu, { moreMenu = false }) {
-                        DropdownMenuItem({ Text("Import from file (.vcf, .csv)") }, leadingIcon = { Icon(Icons.Outlined.FileUpload, null) }, onClick = {
+                        DropdownMenuItem({ Text(stringResource(R.string.import_from_file)) }, leadingIcon = { Icon(Icons.Outlined.FileUpload, null) }, onClick = {
                             moreMenu = false
                             pickFile.launch(arrayOf("text/x-vcard", "text/vcard", "text/directory", "text/csv", "text/comma-separated-values", "*/*"))
                         })
-                        DropdownMenuItem({ Text("Export (.vcf)") }, leadingIcon = { Icon(Icons.Outlined.FileDownload, null) }, onClick = {
+                        DropdownMenuItem({ Text(stringResource(R.string.export_vcf)) }, leadingIcon = { Icon(Icons.Outlined.FileDownload, null) }, onClick = {
                             moreMenu = false; export()
                         })
                     }
                 }
             })
         },
-        floatingActionButton = { if (book != null) FloatingActionButton(onClick = { editing = Contact() }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, "New contact") } },
+        floatingActionButton = { if (book != null) FloatingActionButton(onClick = { editing = Contact() }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, stringResource(R.string.new_contact)) } },
     ) { pad ->
         Column(Modifier.padding(pad)) {
             if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            OutlinedTextField(query, { query = it }, placeholder = { Text("Search contacts") }, singleLine = true,
+            OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.search_contacts)) }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             val list = contacts?.filter { c ->
                 query.isBlank() || listOf(c.fn, c.org, *c.emails.toTypedArray(), *c.phones.toTypedArray()).any { it.contains(query, ignoreCase = true) }
@@ -212,7 +214,7 @@ fun ContactsScreen() {
             when {
                 list == null -> Loading()
                 list.isEmpty() -> EmptyState(Icons.Outlined.Contacts,
-                    if (contacts.isNullOrEmpty()) "No contacts yet.\nTap ⋮ → Import to add them from a .vcf or .csv file (export them from your phone's Contacts app, Google or Outlook)." else "No matches")
+                    stringResource(if (contacts.isNullOrEmpty()) R.string.contacts_empty else R.string.no_matches))
                 else -> LazyColumn {
                     items(list, key = { it.uri }) { c ->
                         ListItem(
@@ -254,41 +256,41 @@ private fun ContactEditor(c: Contact, bookId: Long, onClose: () -> Unit, onSave:
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text(if (isNew) "New contact" else c.fn) },
-            navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            title = { Text(if (isNew) stringResource(R.string.new_contact) else c.fn) },
+            navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             actions = {
-                if (!isNew) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.Delete, "Delete") }
+                if (!isNew) IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.Delete, stringResource(R.string.delete)) }
                 TextButton(enabled = (given + family + org).isNotBlank() && birthdayOk, onClick = {
                     val updated = c.copy(givenName = given.trim(), familyName = family.trim(), org = org.trim(), title = title.trim(),
                         emails = emails.lines().map { it.trim() }.filter { it.isNotEmpty() },
                         phones = phones.lines().map { it.trim() }.filter { it.isNotEmpty() },
                         address = address.trim(), birthday = birthday.trim(), note = note)
                     onSave { Services.api.saveContact(bookId, updated) }
-                }) { Text("Save") }
+                }) { Text(stringResource(R.string.save)) }
             },
         )
     }) { pad ->
         Column(Modifier.padding(pad).imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (!isNew) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Avatar(c, 56)
-                c.phones.firstOrNull()?.let { p -> IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$p"))) }) { Icon(Icons.Outlined.Call, "Call") } }
-                c.emails.firstOrNull()?.let { m -> IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$m"))) }) { Icon(Icons.Outlined.Email, "Email") } }
+                c.phones.firstOrNull()?.let { p -> IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$p"))) }) { Icon(Icons.Outlined.Call, stringResource(R.string.call)) } }
+                c.emails.firstOrNull()?.let { m -> IconButton(onClick = { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$m"))) }) { Icon(Icons.Outlined.Email, stringResource(R.string.email)) } }
             }
-            OutlinedTextField(given, { given = it }, label = { Text("First name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(family, { family = it }, label = { Text("Last name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(org, { org = it }, label = { Text("Organization") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(title, { title = it }, label = { Text("Job title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(emails, { emails = it }, label = { Text("Emails (one per line)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(phones, { phones = it }, label = { Text("Phones (one per line)") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(address, { address = it }, label = { Text("Address") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(birthday, { birthday = it }, label = { Text("Birthday (YYYY-MM-DD)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            OutlinedTextField(given, { given = it }, label = { Text(stringResource(R.string.first_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(family, { family = it }, label = { Text(stringResource(R.string.last_name)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(org, { org = it }, label = { Text(stringResource(R.string.organization)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(title, { title = it }, label = { Text(stringResource(R.string.job_title)) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(emails, { emails = it }, label = { Text(stringResource(R.string.emails_per_line)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(phones, { phones = it }, label = { Text(stringResource(R.string.phones_per_line)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(address, { address = it }, label = { Text(stringResource(R.string.address)) }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(birthday, { birthday = it }, label = { Text(stringResource(R.string.birthday_format)) }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                 isError = !birthdayOk,
-                supportingText = if (birthdayOk) null else { { Text("Use YYYY-MM-DD, for example 1990-05-14, or pick a date") } },
-                trailingIcon = { IconButton(onClick = ::pickBirthday) { Icon(Icons.Outlined.CalendarMonth, "Pick a date") } })
-            OutlinedTextField(note, { note = it }, label = { Text("Notes") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                supportingText = if (birthdayOk) null else { { Text(stringResource(R.string.birthday_error)) } },
+                trailingIcon = { IconButton(onClick = ::pickBirthday) { Icon(Icons.Outlined.CalendarMonth, stringResource(R.string.pick_date)) } })
+            OutlinedTextField(note, { note = it }, label = { Text(stringResource(R.string.notes)) }, minLines = 3, modifier = Modifier.fillMaxWidth())
         }
     }
-    if (confirmDelete) ConfirmDialog("Delete contact", "Delete ${c.fn}?", "Delete", { confirmDelete = false }) {
+    if (confirmDelete) ConfirmDialog(stringResource(R.string.delete_contact), stringResource(R.string.delete_name, c.fn), stringResource(R.string.delete), { confirmDelete = false }) {
         confirmDelete = false
         onSave { Services.api.deleteContact(bookId, c.uri) }
     }

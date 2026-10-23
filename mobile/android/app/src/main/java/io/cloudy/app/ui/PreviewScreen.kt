@@ -1,5 +1,7 @@
 package io.cloudy.app.ui
 
+import io.cloudy.app.R
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
@@ -113,16 +115,16 @@ fun PreviewScreen(nav: NavController, id: Long) {
             .onFailure { e ->
                 // No connection: open the downloaded copy of an "available offline" file, read-only.
                 val saved = Services.offline.savedNode(id)
-                if (saved == null) error = e.message else { node = saved; toast(context, "Offline: showing the saved copy") }
+                if (saved == null) error = e.message else { node = saved; toast(context, context.getString(R.string.offline_saved_copy)) }
             }
     }
 
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(node?.name ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(onClick = { if (dirty) confirmLeave = true else nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            navigationIcon = { IconButton(onClick = { if (dirty) confirmLeave = true else nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
             actions = {
-                node?.let { IconButton(onClick = { sheet = true }) { Icon(Icons.Outlined.MoreVert, "Actions") } }
+                node?.let { IconButton(onClick = { sheet = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.actions)) } }
             },
         )
     }) { pad ->
@@ -141,16 +143,16 @@ fun PreviewScreen(nav: NavController, id: Long) {
                         FileIcon(n, Modifier.padding(16.dp))
                         Text(n.name, style = MaterialTheme.typography.titleMedium)
                         Text(formatSize(n.size), color = MaterialTheme.colorScheme.outline)
-                        Button(onClick = { scope.launch { runCatching { openExternally(context, n) }.onFailure { toast(context, it.message ?: "Failed") } } },
+                        Button(onClick = { scope.launch { runCatching { openExternally(context, n) }.onFailure { toast(context, it.message ?: context.getString(R.string.failed)) } } },
                             modifier = Modifier.padding(top = 16.dp)) {
-                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null); Text("  Open with…")
+                            Icon(Icons.AutoMirrored.Outlined.OpenInNew, null); Text("  " + stringResource(R.string.open_with))
                         }
                     }
                 }
             }
         }
     }
-    if (confirmLeave) ConfirmDialog("Discard changes?", "Your edits to this file haven't been saved.", "Discard", { confirmLeave = false }) {
+    if (confirmLeave) ConfirmDialog(stringResource(R.string.discard_title), stringResource(R.string.discard_text), stringResource(R.string.discard), { confirmLeave = false }) {
         confirmLeave = false
         dirty = false
         nav.popBackStack()
@@ -210,7 +212,7 @@ private fun PdfView(n: FileNode, preview: Boolean = false) {
                 if (preview) Services.api.downloadUrlTo(Services.api.previewUrl(n.id), file) else Services.api.download(n.id, file)
             }
             doc = withContext(Dispatchers.IO) { PdfDoc(file) }
-        } catch (e: Exception) { error = if (preview) "Preview not available: ${e.message}" else e.message }
+        } catch (e: Exception) { error = if (preview) context.getString(R.string.preview_unavailable, e.message ?: "") else e.message }
     }
     DisposableEffect(doc) { val d = doc; onDispose { d?.close() } }
     val d = doc
@@ -225,7 +227,7 @@ private fun PdfView(n: FileNode, preview: Boolean = false) {
                     var bmp by remember(i) { mutableStateOf<Bitmap?>(null) }
                     LaunchedEffect(i, widthPx) { bmp = d.render(i, widthPx) }
                     val b = bmp
-                    if (b != null) Image(b.asImageBitmap(), "Page ${i + 1}", Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
+                    if (b != null) Image(b.asImageBitmap(), stringResource(R.string.page_n, i + 1), Modifier.fillMaxWidth(), contentScale = ContentScale.FillWidth)
                     else Box(Modifier.fillMaxWidth().aspectRatio(d.aspect(i)).background(Color.White))
                 }
             }
@@ -278,7 +280,7 @@ private fun TextView(n: FileNode, canEdit: Boolean, onDirty: (Boolean) -> Unit, 
     var failed by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     LaunchedEffect(n.id) {
-        runCatching { Services.offline.localFile(n)?.readText() ?: Services.api.downloadText(n.id) }
+        runCatching { withContext(Dispatchers.IO) { Services.offline.localFile(n)?.readText() } ?: Services.api.downloadText(n.id) }
             .onSuccess { loaded = it; if (draft == null) draft = it }
             .onFailure { failed = it.message }
     }
@@ -293,17 +295,17 @@ private fun TextView(n: FileNode, canEdit: Boolean, onDirty: (Boolean) -> Unit, 
         // imePadding: edge-to-edge, so the editor must shrink above the keyboard itself (adjustResize no longer does it).
         else -> Column(Modifier.fillMaxSize().imePadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (text != original) "Unsaved changes" else "Saved", Modifier.weight(1f),
+                Text(stringResource(if (text != original) R.string.unsaved_changes else R.string.saved), Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.labelMedium)
                 Button(enabled = text != original && !saving, onClick = {
                     saving = true
                     scope.launch {
                         runCatching { Services.api.saveText(n.id, text) }
-                            .onSuccess { loaded = text; onSaved(it); toast(context, "Saved") }
-                            .onFailure { toast(context, it.message ?: "Save failed") }
+                            .onSuccess { loaded = text; onSaved(it); toast(context, context.getString(R.string.saved)) }
+                            .onFailure { toast(context, it.message ?: context.getString(R.string.save_failed)) }
                         saving = false
                     }
-                }) { Icon(Icons.Outlined.Save, null); Text("  Save") }
+                }) { Icon(Icons.Outlined.Save, null); Text("  " + stringResource(R.string.save)) }
             }
             OutlinedTextField(
                 value = text, onValueChange = { draft = it },
@@ -323,22 +325,22 @@ fun TrashScreen(nav: NavController) {
     val scope = rememberCoroutineScope()
     var items by remember { mutableStateOf<List<TrashItem>?>(null) }
     var confirmEmpty by remember { mutableStateOf(false) }
-    suspend fun load() { items = runCatching { Services.api.trash() }.getOrElse { toast(context, it.message ?: "Failed"); emptyList() } }
+    suspend fun load() { items = runCatching { Services.api.trash() }.getOrElse { toast(context, it.message ?: context.getString(R.string.failed)); emptyList() } }
     LaunchedEffect(Unit) { load() }
-    fun act(block: suspend () -> Unit) = scope.launch { runCatching { block() }.onFailure { toast(context, it.message ?: "Failed") }; load() }
+    fun act(block: suspend () -> Unit) = scope.launch { runCatching { block() }.onFailure { toast(context, it.message ?: context.getString(R.string.failed)) }; load() }
 
     Scaffold(topBar = {
         TopAppBar(
-            title = { Text("Deleted files") },
-            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-            actions = { if (!items.isNullOrEmpty()) IconButton(onClick = { confirmEmpty = true }) { Icon(Icons.Outlined.DeleteSweep, "Empty trash") } },
+            title = { Text(stringResource(R.string.deleted_files)) },
+            navigationIcon = { IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) } },
+            actions = { if (!items.isNullOrEmpty()) IconButton(onClick = { confirmEmpty = true }) { Icon(Icons.Outlined.DeleteSweep, stringResource(R.string.empty_trash)) } },
         )
     }) { pad ->
         Box(Modifier.padding(pad)) {
             val list = items
             when {
                 list == null -> Loading()
-                list.isEmpty() -> EmptyState(Icons.Outlined.DeleteSweep, "Trash is empty")
+                list.isEmpty() -> EmptyState(Icons.Outlined.DeleteSweep, stringResource(R.string.trash_empty))
                 else -> LazyColumn {
                     items(list, key = { it.id }) { t ->
                         ListItem(
@@ -347,8 +349,8 @@ fun TrashScreen(nav: NavController) {
                             supportingContent = { Text("${t.originalPath ?: ""} · ${formatDate(t.deletedAt)}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             trailingContent = {
                                 androidx.compose.foundation.layout.Row {
-                                    IconButton(onClick = { act { Services.api.restore(t.id) } }) { Icon(Icons.Outlined.Restore, "Restore") }
-                                    IconButton(onClick = { act { Services.api.purge(t.id) } }) { Icon(Icons.Outlined.DeleteForever, "Delete permanently") }
+                                    IconButton(onClick = { act { Services.api.restore(t.id) } }) { Icon(Icons.Outlined.Restore, stringResource(R.string.restore)) }
+                                    IconButton(onClick = { act { Services.api.purge(t.id) } }) { Icon(Icons.Outlined.DeleteForever, stringResource(R.string.delete_permanently)) }
                                 }
                             },
                         )
@@ -357,7 +359,7 @@ fun TrashScreen(nav: NavController) {
             }
         }
     }
-    if (confirmEmpty) ConfirmDialog("Empty trash", "All deleted files will be removed permanently.", "Empty", { confirmEmpty = false }) {
+    if (confirmEmpty) ConfirmDialog(stringResource(R.string.empty_trash), stringResource(R.string.empty_trash_text), stringResource(R.string.empty), { confirmEmpty = false }) {
         confirmEmpty = false
         act { Services.api.emptyTrash() }
     }

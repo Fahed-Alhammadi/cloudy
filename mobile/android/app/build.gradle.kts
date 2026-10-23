@@ -21,8 +21,8 @@ android {
         applicationId = "io.cloudy.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "1.9.6"
+        versionCode = 15
+        versionName = "1.10.0"
     }
 
     signingConfigs {
@@ -37,6 +37,10 @@ android {
     }
 
     buildTypes {
+        // Installs next to the Play version (a different signing key) for testing.
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -52,6 +56,14 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    // Only the languages the app is translated into (keeps library translations for others out of the APK).
+    androidResources {
+        localeFilters += listOf("en", "ar", "de", "fr", "es")
+    }
+    // Every language ships in the bundle: the in-app language switch needs them even when the phone's language differs.
+    bundle {
+        language { enableSplit = false }
     }
 }
 
@@ -74,4 +86,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.media3:media3-datasource-okhttp:1.5.1")
+    // App lock (fingerprint / face / screen lock) and the document scanner (Google Play services, no camera permission).
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0")
 }

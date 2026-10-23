@@ -15,9 +15,10 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `docs/index.html` — GitHub Pages site (app info for Google Play, screenshots in `docs/screenshots/`, links to
   `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/app-icon.svg` → `app-icon-512.png` — Google Play icon (launcher artwork, square, RGBA); `docs/play/` — Play
   store screenshots + feature graphic (`render.py`, headless Chrome); `docs/privacy-policy.md` — app privacy policy
-  for Google Play (keep it in sync with what the Android app accesses). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack.
+  for Google Play (keep it in sync with what the Android app accesses). `tests/e2e.py` — end-to-end test (stdlib Python) against a running stack; `tests/i18n_check.py` — translations complete (CI).
 - `app/src/server.ts` — entry: HTTP dispatch, CSRF guard, static app serving, hourly jobs (trash/upload/session expiry).
 - `app/src/config.ts` — env config incl. `version` (APP_VERSION or package.json).
+- `app/src/i18n.ts` — `LANGUAGES` (en, ar, de, fr, es), `pickLanguage` (account → Accept-Language → en), translated email texts.
 - `app/src/schema.sql` — whole DB schema, applied idempotently at every start (no migration tool).
 - `app/src/files.ts` — file model: node tree in Postgres, immutable blobs on disk, size/etag propagation,
   trash, versions, quota, share-based access checks. All file mutations go through here.
@@ -38,8 +39,10 @@ LibreOffice for office previews, started by `app/docker/entrypoint.sh`), configu
 - `app/src/api/` — JSON API: `account.ts` (login, device tokens, me, app passwords, admin), `files.ts` (nodes,
   chunked uploads, trash, versions), `shares.ts` (shares + public links), `groupware.ts`.
 - `app/public/` — HTML5 front end, no build step: `index.html`, `public.html` (`/s/<token>`), `js/*.js` (one module per view), `css/app.css`.
-- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, Live = SSE + Office),
-  `work/Workers.kt` (photo backup, offline sync), `ui/` screens (PreviewScreen edits text files). No flavors.
+  `js/i18n.js` = `t('English text', {vars})` + `setLanguage`; translations in `public/i18n/<lang>.json` (English keys).
+- `mobile/android/` — Kotlin/Compose app `io.cloudy.app`: `data/` (Api, Session, Offline, ConnectionCheck = proxy/DAV diagnostics, ListCache = in-memory listings, Live = SSE + Office,
+  Lang = app language ↔ account, AppLock = biometric lock), `work/Workers.kt` (photo backup, offline sync), `ui/` screens (PreviewScreen edits text files;
+  Browse.kt = grid/sort, search filters, ML Kit document scanner; Security.kt = lock screen, language dialog, Devices). Strings in `res/values*/strings.xml`. No flavors.
   `build-apk.sh` → `mobile/dist/` Play AAB + APK for adb testing.
 
 ## Tech Stack
@@ -54,7 +57,7 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Update server: `docker compose pull && docker compose up -d`
 - Logs: `docker logs -f cloudy` · Reset all data: `docker compose down -v`
 - Type-check: `cd app && npm install && npm run typecheck`
-- E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>`
+- E2E test (stack running): `python3 tests/e2e.py http://localhost:8080 admin <password>` · Translations: `python3 tests/i18n_check.py`
 - Android: `mobile/android/build-apk.sh` (needs JDK 17+, Android SDK 36) → Play AAB + test APK. Releases (image + Play AAB) come
   from a `vX.Y.Z` tag; CI refuses it unless `app/package.json` and `versionName` are X.Y.Z.
 
@@ -76,6 +79,11 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
 - Android signing key `mobile/android/cloudy-release.keystore` + `keystore.properties` are git-ignored and must be backed up;
   CI signs with the same key from repository secrets.
 - Front end: build DOM with `h()` from `ui.js` (never innerHTML with data); each view exports `renderX(main, ctx)`.
+- i18n: every user-visible text goes through `t()` (web, dynamic parts as `{name}`) or `R.string` (Android); add the key to all
+  `public/i18n/*.json` / `values-*/strings.xml` (`tests/i18n_check.py` fails otherwise). Language lists live in i18n.ts, i18n.js,
+  `locales_config.xml`, `Lang.kt` — keep identical. `users.language` NULL = browser/phone; emails use the recipient's. Arabic is RTL:
+  CSS uses logical properties (`inset-inline-*`, `margin-inline-*`, `text-align: start`); Compose uses AutoMirrored icons.
+  Play bundle keeps all languages (`bundle.language.enableSplit = false`) so the in-app switch works. ConnectionCheck texts stay English.
 - Passkeys: RP ID/origin from `PUBLIC_URL` or the request Host; only work over HTTPS/localhost. A passkey login skips TOTP (UV required).
 - Live updates come from DB triggers, so new mutation paths need no extra code; new tables that affect file lists
   need their own trigger. Clients must tolerate duplicate/early events (they just reload).
@@ -85,14 +93,21 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
   buttons `Modifier.sideInsets()`. Test landscape with 3-button navigation.
 - Android state: anything the user types must survive rotation/process death — `rememberSaveable` (+ `jsonSaver` for
   models); restored editors wait for their data (calendars/address book) before showing.
-- Android responsiveness: screens start from `ListCache` and refresh in the background; no disk IO on the UI thread;
-  short NavHost transitions (`NAV_MS`); PDFs render one page at a time on demand.
+- Android responsiveness (Play ANRs): screens start from `ListCache` and refresh in the background; no disk IO on the UI thread
+  (file copies, `Offline` changes, `usedBytes`, content queries → `Dispatchers.IO`; `Jobs.schedule` is safe anywhere); debug builds
+  log violations via StrictMode (`adb logcat | grep StrictMode`); short NavHost transitions (`NAV_MS`); PDFs render one page at a time.
+  Debug builds are `io.cloudy.app.debug` (install next to the Play version).
 - Email is optional: `sendMail` is a no-op without SMTP settings; never reveal whether an account exists.
 - Android ships only through Google Play: no self-updating/APK-installing code, no REQUEST_INSTALL_PACKAGES.
   Play App Signing: Google holds the app key, `cloudy-release.keystore` is the upload key.
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-23: 1.10.0 (code 15) — Multi-language: English, Arabic (RTL), German, French, Spanish on web, Android and emails;
+  account language (`users.language`, `PATCH /api/me {language}`) picked in Settings → Profile / More → Language (Android 13+
+  per-app language). Android (OpenCloud-inspired): document scanner → PDF, grid view + sort, search type filters, link expiry +
+  "allow upload", app lock (biometric/screen lock), Devices screen (`/api/me/app-passwords` marks `current`). Bidi-safe sizes.
+  ANR fixes: offline pin/unpin/sync, uploads, Save to device, Send/Open with, text load and storage size off the UI thread.
 - 2026-10-22: 1.9.6 (code 14) — Google Play only: removed the GitHub self-updater (`github`/`play` flavors, AppUpdater, UpdateUi,
   UpdateWorker, `Api.plainHttp`, install/notification permissions), `/download/android` + `APP_REPO`, the login-page
   and Settings download links; release workflow no longer attaches APKs; docs/privacy policy updated.
@@ -133,21 +148,6 @@ OkHttp, kotlinx.serialization, Coil, Media3, WorkManager; AGP 8.9, compileSdk/ta
   Tags v1.4.0/v1.5.0 point at the passkey-only commit.
 - 2026-10-20: Passkey (WebAuthn) sign-in for the web app: passwordless + autofill, Settings → Passkeys (add/rename/remove,
   password-confirmed), admin "remove passkeys", `passkeys` table, `PUBLIC_URL` setting, `passkeys` count in user JSON.
-- 2026-10-19: Renamed project FileCloud → **Cloudy** everywhere: Android package `io.cloudy.app`, image `ghcr.io/fahed-alhammadi/cloudy`,
-  container/volumes/DB `cloudy`, header `X-Cloudy-Request`, cookies `cloudy_*`, keystore `cloudy-release.keystore` (alias `cloudy`,
-  same key). Entrypoint migrates pre-rename databases (role/db `filecloud` → `cloudy`) once at startup.
-- 2026-10-19: Two-factor authentication (TOTP + recovery codes, QR via `qrcode`) for web, Android and API; admin reset;
-  DAV Basic accepts only app passwords when 2FA is on. Compose lists every setting under `environment:` with defaults
-  (`.env` optional, overrides). Server 1.3.0, Android 1.3.0 (code 3).
-- 2026-10-19: Single all-in-one container (server + embedded PostgreSQL 17 via tini/entrypoint); `DB_PASSWORD` removed,
-  `DB_PATH`/`DATABASE_URL` added, compose service renamed `cloudy` with `env_file: .env`. Existing volumes migrate as-is.
-- 2026-10-19: `.env` options `APP_USER` (run as uid:gid, default 1000:1000) and `DATA_PATH` (user-file storage, e.g. host NFS mount);
-  startup writability check.
-- 2026-10-19: CI fix — setup-android v3 failed installing legacy `tools`; now v4 with explicit SDK packages.
-  All actions moved to Node 24 majors; runners pinned to ubuntu-24.04.
-- 2026-10-19: Renamed project to Cloudy (package `io.cloudy.app`, new signing key, DB `cloudy`); removed iOS app.
-  Over-the-air updates: server version/update check (`UPDATE_REPO`), `updater` compose service, Android APK
-  publishing + in-app/daily update check. GitHub CI + release workflows. Server 1.1.0, Android 1.1.0 (code 2).
-- 2026-10-19: Android app (files, previews, sharing, offline, photo backup, calendar, contacts); device-token auth.
-- 2026-10-19: App port published directly for an external reverse proxy; `TRUST_PROXY` guards forwarded headers.
-- 2026-10-19: Initial build — files, uploads, trash, versions, sharing, WebDAV, CalDAV/CardDAV, HTML5 UI, Compose stack.
+- 2026-10-19: Initial build (files, sharing, WebDAV/CalDAV/CardDAV, HTML5 UI) and Android app; renamed FileCloud → Cloudy
+  (entrypoint migrates old `filecloud` DBs); single all-in-one container with embedded PostgreSQL 17; `APP_USER`/`DATA_PATH`;
+  `TRUST_PROXY`; TOTP 2FA (DAV Basic then needs app passwords); GitHub CI + release workflows (Node 24 actions, ubuntu-24.04).

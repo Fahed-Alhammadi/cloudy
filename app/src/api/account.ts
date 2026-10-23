@@ -11,6 +11,7 @@ import { rootOf } from '../files.ts';
 import { newSecret, otpauthUri, verifyTotp, newRecoveryCodes, normalizeRecoveryCode } from '../totp.ts';
 import QRCode from 'qrcode';
 import { notifyPasswordChanged } from '../mail.ts';
+import { isLanguage } from '../i18n.ts';
 
 async function requirePassword(userId: string, password: unknown): Promise<void> {
   const row = await one<{ password_hash: string }>(`SELECT password_hash FROM users WHERE id = $1`, [userId]);
@@ -71,6 +72,11 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
                               notify_shares = COALESCE($4, notify_shares) WHERE id = $1`,
       [user.id, typeof b.displayName === 'string' ? b.displayName.trim() || user.id : null,
        typeof b.email === 'string' ? b.email.trim() : null, typeof b.notifyShares === 'boolean' ? b.notifyShares : null]);
+    // language: a supported code, or null / '' for "same as the browser or phone".
+    if ('language' in b) {
+      if (b.language && !isLanguage(b.language)) throw new HttpError(400, 'Unsupported language');
+      await q(`UPDATE users SET language = $2 WHERE id = $1`, [user.id, b.language || null]);
+    }
     noContent(res);
   }));
 
@@ -121,9 +127,11 @@ export function registerAccount(r: Router, authed: (h: Authed) => (ctx: Ctx) => 
   }));
 
   // App passwords for WebDAV / CalDAV / CardDAV clients.
-  r.get('/api/me/app-passwords', authed(async ({ res }, user) => {
-    json(res, await q(`SELECT id, name, created_at AS "createdAt", last_used_at AS "lastUsedAt"
-                         FROM app_passwords WHERE user_id = $1 ORDER BY created_at DESC`, [user.id]));
+  // `current` marks the token this request was made with (the phone asking), so it isn't revoked by mistake.
+  r.get('/api/me/app-passwords', authed(async ({ req, res }, user) => {
+    const bearer = bearerToken(req);
+    json(res, await q(`SELECT id, name, created_at AS "createdAt", last_used_at AS "lastUsedAt", token_hash = $2 AS current
+                         FROM app_passwords WHERE user_id = $1 ORDER BY created_at DESC`, [user.id, bearer ? sha256(bearer) : '']));
   }));
 
   r.post('/api/me/app-passwords', authed(async ({ req, res }, user) => {
