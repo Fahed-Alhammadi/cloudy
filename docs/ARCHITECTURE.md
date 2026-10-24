@@ -124,15 +124,18 @@ what changed since their last sync.
 
 ## 6. Updates
 
-**Server.** Each `v*` tag publishes `ghcr.io/fahed-alhammadi/cloudy:latest`. Run
+Each product (server, Android, iOS) has its own version and workflow and is published when its version is bumped
+on main (`scripts/version.py bump`), tagged `server-v…`, `android-v…` or `ios-v…`.
+
+**Server.** A new server version publishes `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` and `:latest`. Run
 `docker compose pull && docker compose up -d` to update.
 - `/status` reports the running version.
 - The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every
   start.
 
 **Android app (Google Play).**
-1. A `v*` tag builds the signed `.aab` in CI (the workflow fails if the tag doesn't match `app/package.json` or the
-   app's `versionName`) and, when `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing track.
+1. A new `versionName` on main builds the signed `.aab` in CI (`.github/workflows/android.yml`) and, when
+   `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing track.
 2. Google Play installs and updates the app; the app has no updater of its own. Play App Signing holds the app
    key; `cloudy-release.keystore` is the upload key.
 

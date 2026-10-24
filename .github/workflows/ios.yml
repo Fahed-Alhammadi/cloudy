@@ -1,0 +1,72 @@
+# iOS app (App Store). Runs when ios/ changes.
+#   - every push / pull request: unsigned simulator build
+#   - push to main with an unreleased MARKETING_VERSION (scripts/version.py bump ios X.Y.Z): signed build uploaded to
+#     App Store Connect → TestFlight (submit it for App Review by hand), then tag ios-vX.Y.Z + GitHub release.
+# Secrets: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY (contents of AuthKey_<id>.p8; App Store Connect →
+#   Users and Access → Integrations → App Store Connect API, role Admin for cloud signing).
+# Without them the release job does nothing and doesn't tag, so the version stays unreleased.
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - 'ios/**'
+      - 'scripts/version.py'
+      - 'scripts/github-release.sh'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build for the simulator (unsigned)
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          ios/build.sh
+
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: v
+        env:
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          if scripts/version.py released ios; then
+            echo "::notice::iOS $(scripts/version.py get ios) is already released. Run scripts/version.py bump ios X.Y.Z to publish a new one."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$ASC_PRIVATE_KEY" ]; then
+            echo "::warning::No App Store Connect API key secrets: iOS $(scripts/version.py get ios) not uploaded."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Archive and upload to App Store Connect
+        if: steps.v.outputs.skip != 'true'
+        env:
+          DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          command -v xcodegen >/dev/null || brew install xcodegen
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
+          ios/build.sh upload
+      - name: Tag and GitHub release
+        if: steps.v.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/github-release.sh ios "iOS" false ios

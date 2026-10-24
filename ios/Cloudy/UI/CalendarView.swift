@@ -1,0 +1,340 @@
+import SwiftUI
+
+private var cal: Calendar { Calendar.current }
+
+private func startOf(_ e: CalEvent, master: Bool = false) -> Date {
+    let s = master ? (e.masterStart ?? e.start) : e.start
+    return e.isAllDay ? (dayFormatter.date(from: String(s.prefix(10))) ?? Date()) : (parseDate(s) ?? Date())
+}
+
+private func endOf(_ e: CalEvent, master: Bool = false) -> Date {
+    let s = master ? (e.masterEnd ?? e.end) : e.end
+    return e.isAllDay ? (dayFormatter.date(from: String(s.prefix(10))) ?? Date()) : (parseDate(s) ?? Date())
+}
+
+private func onDay(_ e: CalEvent, _ day: Date) -> Bool {
+    let next = cal.date(byAdding: .day, value: 1, to: day)!
+    let s = startOf(e), end = endOf(e)
+    return s < next && (end > day || (end == s && s >= day))
+}
+
+struct CalendarView: View {
+    @State private var month = cal.dateInterval(of: .month, for: Date())!.start
+    @State private var selected = cal.startOfDay(for: Date())
+    @State private var calendars: [DavCollection]?
+    @State private var events: [CalEvent] = []
+    @State private var loadError: String?
+    @State private var editing: EditRequest?
+
+    struct EditRequest: Identifiable {
+        let id = UUID()
+        let event: CalEvent?
+        let day: Date
+    }
+
+    private var gridStart: Date {
+        let weekday = cal.component(.weekday, from: month)
+        let offset = (weekday - cal.firstWeekday + 7) % 7
+        return cal.date(byAdding: .day, value: -offset, to: month)!
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    monthGrid
+                }
+                Section(selected.formatted(date: .complete, time: .omitted)) {
+                    let today = events.filter { onDay($0, selected) }.sorted { a, b in
+                        a.isAllDay != b.isAllDay ? a.isAllDay : startOf(a) < startOf(b)
+                    }
+                    if today.isEmpty {
+                        Text("No events").foregroundStyle(.secondary)
+                    }
+                    ForEach(today) { e in
+                        Button { editing = EditRequest(event: e, day: selected) } label: { EventRow(event: e, color: color(e)) }
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .overlay { if let loadError, calendars == nil { ErrorState(message: loadError) { Task { await load() } } } }
+            .navigationTitle(month.formatted(.dateTime.month(.wide).year()))
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarLeading) {
+                    Button { shift(-1) } label: { Label("Previous month", systemImage: "chevron.backward") }
+                    Button { shift(1) } label: { Label("Next month", systemImage: "chevron.forward") }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Today") {
+                        month = cal.dateInterval(of: .month, for: Date())!.start
+                        selected = cal.startOfDay(for: Date())
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { editing = EditRequest(event: nil, day: selected) } label: { Label("New event", systemImage: "plus") }
+                        .disabled(calendars?.isEmpty ?? true)
+                }
+            }
+            .refreshable { await load() }
+            .task(id: month) { await load() }
+            .onLiveChange(any: true) { Task { await load() } }
+            .sheet(item: $editing) { req in
+                EventEditor(event: req.event, day: req.day, calendars: calendars ?? []) { Task { await load() } }
+            }
+        }
+    }
+
+    private var monthGrid: some View {
+        let symbols = cal.veryShortStandaloneWeekdaySymbols
+        let first = cal.firstWeekday - 1
+        let headers = Array(symbols[first...] + symbols[..<first])
+        return VStack(spacing: 6) {
+            HStack {
+                ForEach(Array(headers.enumerated()), id: \.offset) { _, s in
+                    Text(s).font(.caption2.bold()).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 4) {
+                ForEach(0..<42, id: \.self) { i in
+                    let day = cal.date(byAdding: .day, value: i, to: gridStart)!
+                    dayCell(day)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .gesture(DragGesture(minimumDistance: 30).onEnded { v in
+            if abs(v.translation.width) > abs(v.translation.height) { shift(v.translation.width < 0 ? 1 : -1) }
+        })
+    }
+
+    private func dayCell(_ day: Date) -> some View {
+        let inMonth = cal.isDate(day, equalTo: month, toGranularity: .month)
+        let isSelected = day == selected
+        let isToday = cal.isDateInToday(day)
+        let dots = events.filter { onDay($0, day) }.prefix(3)
+        return Button {
+            selected = day
+        } label: {
+            VStack(spacing: 3) {
+                Text("\(cal.component(.day, from: day))")
+                    .font(.callout.weight(isToday ? .bold : .regular))
+                    .foregroundStyle(isSelected ? Color.white : isToday ? Color.accentColor : inMonth ? Color.primary : Color.secondary.opacity(0.6))
+                    .frame(width: 32, height: 32)
+                    .background(isSelected ? Circle().fill(Color.accentColor) : nil)
+                HStack(spacing: 2) {
+                    ForEach(Array(dots.enumerated()), id: \.offset) { _, e in Circle().fill(color(e)).frame(width: 5, height: 5) }
+                }
+                .frame(height: 5)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(day.formatted(date: .complete, time: .omitted))
+    }
+
+    private func color(_ e: CalEvent) -> Color {
+        Color(hex: calendars?.first { $0.id == e.calendarId }?.color) ?? .accentColor
+    }
+
+    private func shift(_ months: Int) {
+        month = cal.date(byAdding: .month, value: months, to: month)!
+        selected = month
+    }
+
+    private func load() async {
+        do {
+            let cals = try await API.shared.calendars()
+            let from = gridStart, to = cal.date(byAdding: .day, value: 42, to: gridStart)!
+            var all: [CalEvent] = []
+            for c in cals { all += try await API.shared.events(c.id, from: from, to: to) }
+            calendars = cals
+            events = all
+            loadError = nil
+        } catch is CancellationError {
+        } catch let e as URLError where e.code == .cancelled {
+        } catch {
+            loadError = errorText(error)
+        }
+    }
+}
+
+private struct EventRow: View {
+    let event: CalEvent
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text((event.summary ?? "").isEmpty ? String(localized: "(no title)") : event.summary!).font(.body.weight(.medium))
+                    if event.recurring == true { Image(systemName: "repeat").font(.caption).foregroundStyle(.secondary) }
+                }
+                Text(timeText).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var timeText: String {
+        var t = event.isAllDay ? String(localized: "All day")
+            : "\(startOf(event).formatted(date: .omitted, time: .shortened)) – \(endOf(event).formatted(date: .omitted, time: .shortened))"
+        if let loc = event.location, !loc.isEmpty { t += " · " + loc }
+        return t
+    }
+}
+
+extension Color {
+    /// `#RRGGBB` (calendar colors from the server).
+    init?(hex: String?) {
+        guard var s = hex?.trimmingCharacters(in: .whitespaces), !s.isEmpty else { return nil }
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count >= 6, let v = UInt32(s.prefix(6), radix: 16) else { return nil }
+        self.init(red: Double((v >> 16) & 0xFF) / 255, green: Double((v >> 8) & 0xFF) / 255, blue: Double(v & 0xFF) / 255)
+    }
+}
+
+/// Create or edit an event. Repeating events are edited as a whole series.
+struct EventEditor: View {
+    let event: CalEvent?
+    let calendars: [DavCollection]
+    let onDone: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var allDay: Bool
+    @State private var start: Date
+    @State private var end: Date
+    @State private var repeatRule: String
+    @State private var location: String
+    @State private var notes: String
+    @State private var calendarId: Int64
+    @State private var saving = false
+    @State private var confirmDelete = false
+    @State private var error: String?
+
+    init(event: CalEvent?, day: Date, calendars: [DavCollection], onDone: @escaping () -> Void) {
+        self.event = event
+        self.calendars = calendars
+        self.onDone = onDone
+        _title = State(initialValue: event?.summary ?? "")
+        _allDay = State(initialValue: event?.isAllDay ?? false)
+        _repeatRule = State(initialValue: (event?.rrule ?? "").uppercased())
+        _location = State(initialValue: event?.location ?? "")
+        _notes = State(initialValue: event?.description ?? "")
+        _calendarId = State(initialValue: event?.calendarId ?? calendars.first?.id ?? 0)
+        if let event {
+            let s = startOf(event, master: true)
+            var e = endOf(event, master: true)
+            if event.isAllDay { e = cal.date(byAdding: .day, value: -1, to: e) ?? e } // stored end is exclusive
+            _start = State(initialValue: s)
+            _end = State(initialValue: max(e, s))
+        } else {
+            let base = cal.isDateInToday(day)
+                ? cal.nextDate(after: Date(), matching: DateComponents(minute: 0), matchingPolicy: .nextTime)!
+                : cal.date(bySettingHour: 9, minute: 0, second: 0, of: day)!
+            _start = State(initialValue: base)
+            _end = State(initialValue: base.addingTimeInterval(3600))
+        }
+    }
+
+    private var endBeforeStart: Bool {
+        allDay ? cal.startOfDay(for: end) < cal.startOfDay(for: start) : end < start
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Title", text: $title)
+                    TextField("Location", text: $location)
+                }
+                Section {
+                    Toggle("All day", isOn: $allDay)
+                    DatePicker("Starts", selection: $start, displayedComponents: allDay ? .date : [.date, .hourAndMinute])
+                    DatePicker("Ends", selection: $end, displayedComponents: allDay ? .date : [.date, .hourAndMinute])
+                    Picker("Repeat", selection: $repeatRule) {
+                        Text("Never").tag("")
+                        Text("Every day").tag("DAILY")
+                        Text("Every week").tag("WEEKLY")
+                        Text("Every month").tag("MONTHLY")
+                        Text("Every year").tag("YEARLY")
+                    }
+                } footer: {
+                    if endBeforeStart {
+                        Text("The end is before the start").foregroundStyle(.red)
+                    } else if event?.recurring == true {
+                        Text("Changes apply to all repeats of this event.")
+                    }
+                }
+                if event == nil && calendars.count > 1 {
+                    Picker("Calendar", selection: $calendarId) {
+                        ForEach(calendars) { c in Text(c.name).tag(c.id) }
+                    }
+                }
+                Section("Notes") {
+                    TextField("Notes", text: $notes, axis: .vertical).lineLimit(3...10)
+                }
+                if event != nil {
+                    Section {
+                        Button("Delete event", role: .destructive) { confirmDelete = true }
+                    }
+                }
+            }
+            .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) } // keep the duration
+            .navigationTitle(event == nil ? "New event" : "Edit event")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if saving { ProgressView() } else { Button("Save", action: save).bold().disabled(endBeforeStart) }
+                }
+            }
+            .confirmationDialog(event?.recurring == true ? "Delete all repeats of this event?" : "Delete this event?",
+                                isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive, action: delete)
+            }
+            .interactiveDismissDisabled(saving)
+            .errorAlert($error)
+        }
+    }
+
+    private func save() {
+        let s: String, e: String
+        if allDay {
+            s = dayFormatter.string(from: start)
+            e = dayFormatter.string(from: cal.date(byAdding: .day, value: 1, to: end)!)
+        } else {
+            s = isoString(start)
+            e = isoString(end)
+        }
+        let input = EventInput(summary: title.trimmingCharacters(in: .whitespaces), start: s, end: e, allDay: allDay,
+                               location: location, description: notes, rrule: repeatRule)
+        saving = true
+        Task {
+            do {
+                if let event { try await API.shared.updateEvent(event.calendarId, uri: event.uri, input) }
+                else { try await API.shared.createEvent(calendarId, input) }
+                onDone()
+                dismiss()
+            } catch {
+                self.error = errorText(error) // keep the editor open so nothing typed is lost
+            }
+            saving = false
+        }
+    }
+
+    private func delete() {
+        guard let event else { return }
+        Task {
+            do {
+                try await API.shared.deleteEvent(event.calendarId, uri: event.uri)
+                onDone()
+                dismiss()
+            } catch {
+                self.error = errorText(error)
+            }
+        }
+    }
+}

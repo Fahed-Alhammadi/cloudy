@@ -41,11 +41,14 @@ On the first run the script creates a signing key: `android/cloudy-release.keyst
 
 The app is installed and updated through Google Play only; it has no updater of its own.
 
-1. Bump `versionCode` (must increase) and `versionName` in `android/app/build.gradle.kts`, and `version` in
-   `../app/package.json` to the same version.
-2. Commit and push a tag `vX.Y.Z` (matching `versionName`). The release workflow builds the signed `.aab`, keeps
-   it as a workflow artifact and, when `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing
-   track. Promote to production in Play Console.
+The Android app has its own version, independent of the server and the iPhone app.
+
+1. `scripts/version.py bump android X.Y.Z` (from the repo root): sets `versionName` and raises `versionCode` by one.
+2. Commit and push to main. `.github/workflows/android.yml` builds the signed `.aab`, keeps it as a workflow
+   artifact and, when `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing track and tags
+   `android-vX.Y.Z`. Promote to production in Play Console.
+
+Pushes without a version bump only run the debug build. Secrets are listed at the top of the workflow.
 
 For local testing: `adb install dist/Cloudy-<version>.apk` (signed with the upload key, so it can't update a
 Play install — uninstall first).

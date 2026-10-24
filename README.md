@@ -36,7 +36,9 @@ database inside), a browser app, and a native Android app on Google Play.
   - calendar and contacts;
   - edit text files;
   - installed and updated through Google Play.
-- **Live updates:** file lists in the browser and the Android app update by themselves when files change
+- **iPhone app** (SwiftUI, iOS 17+, App Store): files with Quick Look previews, uploads from Photos and Files,
+  document scanner, sharing, calendar, contacts, text editing, Face ID app lock. See [ios/README.md](ios/README.md).
+- **Live updates:** file lists in the browser and the phone apps update by themselves when files change
   anywhere (another device, a share, WebDAV), like Google Drive.
 - **Office documents:** Word, Excel, PowerPoint and OpenDocument files can be viewed (read-only) in the browser
   and the Android app; the built-in LibreOffice turns them into PDF — inside the same container.
@@ -166,15 +168,33 @@ release, run this in the folder with your `docker-compose.yml`:
 docker compose pull && docker compose up -d
 ```
 
-The database schema migrates itself at startup. Your data stays in the volumes. The release workflow in
-`.github/workflows/release.yml` publishes the image to GitHub Container Registry when you push a `v*` tag.
+The database schema migrates itself at startup. Your data stays in the volumes.
 
-**Android app.** The app is distributed and updated through Google Play only. The same `v*` tag builds the
-signed `.aab` (`.github/workflows/release.yml`), keeps it as a workflow artifact and, once the
-`PLAY_SERVICE_ACCOUNT_JSON` secret is set, uploads it to the Play closed-testing track. Bump `version` in
-`app/package.json` and `versionCode`/`versionName` in `mobile/android/app/build.gradle.kts` before tagging (the
-release workflow refuses a tag that doesn't match). `mobile/android/build-apk.sh` builds the bundle locally (plus an
-APK for `adb install` testing) into `mobile/dist/`. See [mobile/README.md](mobile/README.md).
+## Releases (maintainers)
+
+The server, the Android app and the iPhone app are released **independently**. Each has its own version, its own
+GitHub Actions workflow and its own tag:
+
+| Product | Folder | Version lives in | Published to | Tag |
+|---|---|---|---|---|
+| Server | `server/` | `server/package.json` | `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` + `:latest` | `server-vX.Y.Z` |
+| Android | `android/` | `versionName`/`versionCode` in `android/app/build.gradle.kts` | Google Play (closed testing) | `android-vX.Y.Z` |
+| iPhone | `ios/` | `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in `ios/project.yml` | App Store Connect (TestFlight) | `ios-vX.Y.Z` |
+
+Each workflow runs only when its folder changes: every push and pull request is tested and built. Nothing is
+published until you **bump the version**:
+
+```sh
+git fetch --tags && scripts/version.py status       # current versions, and which are released
+scripts/version.py bump server 1.10.1                # or: android 1.11.0 / ios 1.0.1 (build numbers go up by one)
+git commit -am "server 1.10.1: …" && git push        # the Server workflow tests, publishes and tags server-v1.10.1
+```
+
+A server-only fix therefore never touches the apps, and an app update never rebuilds the image. The store
+uploads stop at Play closed testing and TestFlight: promoting to production in Play Console and submitting for App
+Review stay manual. Required secrets are listed at the top of `.github/workflows/android.yml` and `ios.yml`; without
+them those workflows build but don't publish or tag. Details: [android/README.md](android/README.md),
+[ios/README.md](ios/README.md).
 
 ## Two-factor authentication
 
@@ -252,19 +272,23 @@ Set these in `docker-compose.yml` (the value after `:-`) or in a `.env` file nex
 
 | Task | Command |
 |---|---|
-| Type-check the server | `cd app && npm install && npm run typecheck` |
+| Type-check the server | `cd server && npm install && npm run typecheck` |
 | End-to-end tests (stack running) | `python3 tests/e2e.py http://localhost:8080 admin '<admin password>'` |
-| Android debug build | `cd mobile/android && ./gradlew assembleDebug` (JDK 17+, Android SDK 36) |
+| Android debug build | `cd android && ./gradlew assembleDebug` (JDK 17+, Android SDK 36) |
+| iOS simulator build | `ios/build.sh` (Xcode 16+, `brew install xcodegen`) |
+| Translations complete | `python3 tests/i18n_check.py` |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how Cloudy works inside.
 
 ## Project layout
 
 ```
-app/                 server (Node.js/TypeScript) and the HTML5 web app (app/public)
-mobile/android/      native Android app (Kotlin, Jetpack Compose)
-docs/                architecture notes
+server/              server (Node.js/TypeScript) + HTML5 web app (server/public) → Docker image   tag server-vX.Y.Z
+android/             native Android app (Kotlin, Jetpack Compose) → Google Play           tag android-vX.Y.Z
+ios/                 native iPhone app (Swift, SwiftUI) → App Store                      tag ios-vX.Y.Z
 deploy/              docker-compose.yml that builds the image from source
-tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests
-.github/workflows/   CI and release automation (Docker image + Play bundle)
+docs/                website, privacy policy, architecture notes
+tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests, translation check
+scripts/             version.py (versions of all three), github-release.sh (tag + release notes)
+.github/workflows/   server.yml, android.yml, ios.yml (each: test → publish on version bump), translations.yml
 ```

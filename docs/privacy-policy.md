@@ -4,9 +4,10 @@ title: Privacy Policy
 
 # Privacy Policy
 
-Last updated: October 23, 2026
+Last updated: October 24, 2026
 
-This privacy policy explains how the **Cloudy** Android app (package `io.cloudy.app`) handles your information.
+This privacy policy explains how the **Cloudy** apps for Android (package `io.cloudy.app`) and iPhone (bundle ID `io.cloudy.app`)
+handle your information. The table below describes the Android app; [the iPhone app](#iphone-app) section lists where it differs.
 Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public at
 <https://github.com/Fahed-Alhammadi/cloudy>.
 
@@ -40,9 +41,26 @@ Your files, photos, calendars, contacts and account live on the Cloudy server yo
 
 The app does **not** request access to your location, camera, microphone, phone calls, SMS or phone contacts (the document scanner uses the camera through Google Play services, as described above), and it does not collect advertising IDs or device identifiers.
 
+## iPhone app
+
+The iPhone app works like the Android app above, with these differences:
+
+- **Device name:** the iPhone model (for example "iPhone (iPhone17,1)") labels the device token. The phone's own name is not sent.
+- **Device token:** stored in the iOS Keychain on this device only. It is not synced to iCloud Keychain or included in backups to other devices.
+- **Photos and videos:** you pick them with the system photo picker, so the app only receives the items you select. It cannot read your
+  photo library and has no photo backup. If you save a file to Photos from the share sheet, iOS asks for permission to *add* to your library.
+- **Files:** downloaded copies for preview and sharing are kept in the app's cache, which iOS may clear at any time. Signing out deletes them.
+- **Document scans** use Apple's built-in document camera (VisionKit). The camera is used only while you scan; pages are processed on the
+  iPhone and only the finished PDF is uploaded to your server. No Google services are used.
+- **App lock** uses Face ID, Touch ID or your passcode through iOS. The app only learns whether it succeeded.
+- **Language** is chosen in the iOS Settings app (Settings → Cloudy → Language) and stays on the phone.
+- **Local network:** iOS may ask to allow access to devices on your local network. This is only used to reach a Cloudy server at a local address.
+- The app contains no advertising, analytics or tracking, and does not use Apple's advertising identifier. Apple's privacy policy applies
+  to the App Store.
+
 ## App updates
 
-The app is updated by Google Play; it does not check for or download updates itself. Google's privacy policy applies to Google Play.
+The apps are updated by Google Play and the App Store; they do not check for or download updates themselves. Google's and Apple's privacy policies apply to their stores.
 
 ## Sharing of information
 
@@ -63,7 +81,7 @@ Your server operator may set up email so the server can send messages such as pa
 
 ## Keeping and deleting your information
 
-- **On your phone:** signing out removes the device token and revokes it on the server. Uninstalling the app (or *Settings → Apps → Cloudy → Clear storage*) deletes everything the app stored on the phone, including offline copies.
+- **On your phone:** signing out removes the device token and revokes it on the server. Uninstalling the app (or, on Android, *Settings → Apps → Cloudy → Clear storage*) deletes everything the app stored on the phone, including offline copies.
 - **On your server:** you can delete your own files, calendars and contacts in the app or the web interface. Deleted files go to the trash first, and the server deletes them permanently after a retention period that the operator sets (30 days by default).
 - **Your account:** Cloudy accounts are created by the server operator, not in the app. To delete your account and all its data, ask your server operator, who can do it under *Administration → Users*. If you run the server, you can do it yourself.
 

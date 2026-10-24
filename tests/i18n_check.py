@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Checks translations (stdlib only, no server needed): python3 tests/i18n_check.py
 
-- web: every t('…') text in app/public/js has an entry in each app/public/i18n/<lang>.json, same {placeholders}
+- web: every t('…') text in server/public/js has an entry in each server/public/i18n/<lang>.json, same {placeholders}
 - Android: every string in res/values has each res/values-<lang> translation, same %1$s/%1$d arguments
-- the language list is the same in src/i18n.ts, js/i18n.js, locales_config.xml and Lang.kt
+- iOS: every string in Localizable.xcstrings / InfoPlist.xcstrings is translated into each language, same %@/%lld
+- the language list is the same in server/src/i18n.ts, js/i18n.js, locales_config.xml, Lang.kt and the iOS Info.plist
 """
 import glob, json, os, re, sys
 import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WEB = os.path.join(ROOT, 'app/public')
-RES = os.path.join(ROOT, 'mobile/android/app/src/main/res')
+WEB = os.path.join(ROOT, 'server/public')
+RES = os.path.join(ROOT, 'android/app/src/main/res')
+IOS = os.path.join(ROOT, 'ios/Cloudy')
 errors = []
 
 
@@ -19,12 +21,13 @@ def langs_in(path, pattern):
 
 
 # ---- language lists
-server = re.search(r"LANGUAGES = \[([^\]]+)\]", open(os.path.join(ROOT, 'app/src/i18n.ts')).read()).group(1)
+server = re.search(r"LANGUAGES = \[([^\]]+)\]", open(os.path.join(ROOT, 'server/src/i18n.ts')).read()).group(1)
 lists = {
-    'app/src/i18n.ts': re.findall(r"'(\w+)'", server),
-    'app/public/js/i18n.js': langs_in('app/public/js/i18n.js', r"\['(\w+)', '[^']+'\]"),
-    'locales_config.xml': langs_in('mobile/android/app/src/main/res/xml/locales_config.xml', r'android:name="(\w+)"'),
-    'Lang.kt': re.findall(r'"(\w+)"', re.search(r'val CODES = listOf\(([^)]*)\)', open(os.path.join(ROOT, 'mobile/android/app/src/main/java/io/cloudy/app/data/Lang.kt')).read()).group(1)),
+    'server/src/i18n.ts': re.findall(r"'(\w+)'", server),
+    'server/public/js/i18n.js': langs_in('server/public/js/i18n.js', r"\['(\w+)', '[^']+'\]"),
+    'locales_config.xml': langs_in('android/app/src/main/res/xml/locales_config.xml', r'android:name="(\w+)"'),
+    'iOS Info.plist': re.findall(r'<string>(\w\w)</string>', re.search(r'CFBundleLocalizations</key>\s*<array>(.*?)</array>', open(os.path.join(IOS, 'Info.plist')).read(), re.S).group(1)),
+    'Lang.kt': re.findall(r'"(\w+)"', re.search(r'val CODES = listOf\(([^)]*)\)', open(os.path.join(ROOT, 'android/app/src/main/java/io/cloudy/app/data/Lang.kt')).read()).group(1)),
 }
 first = next(iter(lists.values()))
 for where, codes in lists.items():
@@ -64,7 +67,22 @@ for lang in translated:
     for name in tr.keys() - base.keys():
         errors.append(f'android {lang}: {name} is not in values/strings.xml')
 
+# ---- iOS (String Catalogs; Xcode adds new keys from the Swift code when the app is built in Xcode)
+ios_count = 0
+fmt = lambda s: sorted(re.findall(r'%(?:\d\$)?(?:lld|ld|d|@)', s))
+for catalog in ('Localizable', 'InfoPlist'):
+    cat = json.load(open(os.path.join(IOS, f'Resources/{catalog}.xcstrings')))
+    for key, entry in cat['strings'].items():
+        if entry.get('shouldTranslate') is False: continue
+        ios_count += 1
+        for lang in translated:
+            unit = entry.get('localizations', {}).get(lang, {}).get('stringUnit')
+            if not unit or unit.get('state') != 'translated' or not unit.get('value'):
+                errors.append(f'ios {lang}: missing "{key}" in {catalog}.xcstrings')
+            elif fmt(key) != fmt(unit['value']):
+                errors.append(f'ios {lang}: format arguments differ in "{key}"')
+
 if errors:
     print('\n'.join(errors))
     sys.exit(1)
-print(f'i18n OK: {len(first)} languages, {len(keys)} web strings, {len(base)} Android strings')
+print(f'i18n OK: {len(first)} languages, {len(keys)} web strings, {len(base)} Android strings, {ios_count} iOS strings')

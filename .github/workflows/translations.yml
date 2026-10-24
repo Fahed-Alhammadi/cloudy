@@ -1,0 +1,24 @@
+# Translations are shared by the web app, Android and iOS: checks they're complete when any of them change.
+name: Translations
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - 'server/public/**'
+      - 'server/src/i18n.ts'
+      - 'android/app/src/main/res/**'
+      - 'android/app/src/main/java/io/cloudy/app/data/Lang.kt'
+      - 'ios/Cloudy/Resources/*.xcstrings'
+      - 'ios/Cloudy/Info.plist'
+      - 'tests/i18n_check.py'
+      - '.github/workflows/translations.yml'
+  pull_request:
+    paths: *paths
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 tests/i18n_check.py

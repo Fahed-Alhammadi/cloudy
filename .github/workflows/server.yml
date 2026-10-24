@@ -1,0 +1,95 @@
+# Server (container image). Runs when server files change.
+#   - every push / pull request: type-check + end-to-end tests against the built container
+#   - push to main with an unreleased version in server/package.json (scripts/version.py bump server X.Y.Z):
+#     image ghcr.io/<owner>/cloudy:X.Y.Z and :latest, then tag server-vX.Y.Z + GitHub release
+name: Server
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - 'server/**'
+      - 'deploy/**'
+      - 'docker-compose.yml'
+      - 'tests/e2e.py'
+      - 'scripts/version.py'
+      - 'scripts/github-release.sh'
+      - '.github/workflows/server.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: server-${{ github.ref }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Type-check
+        working-directory: server
+        run: npm ci && npm run typecheck
+      - name: Start stack
+        run: |
+          printf 'ADMIN_USER=admin\nADMIN_PASSWORD=ci-admin-password\n' > .env
+          docker compose -f deploy/docker-compose.yml --env-file .env up -d --build --wait
+      - name: End-to-end tests
+        run: |
+          # The email tests run a fake SMTP server on this machine; the container reaches it via its network gateway.
+          export CLOUDY_TEST_SMTP_HOST=$(docker inspect cloudy -f '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}')
+          python3 tests/e2e.py http://localhost:8080 admin ci-admin-password
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f deploy/docker-compose.yml --env-file .env logs cloudy
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags + history for the release notes
+      - id: v
+        run: |
+          echo "version=$(scripts/version.py get server)" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/cloudy" >> "$GITHUB_OUTPUT"
+          if scripts/version.py released server; then
+            echo "::notice::Server $(scripts/version.py get server) is already released. Run scripts/version.py bump server X.Y.Z to publish a new one."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-qemu-action@v4
+        if: steps.v.outputs.skip != 'true'
+      - uses: docker/setup-buildx-action@v4
+        if: steps.v.outputs.skip != 'true'
+      - uses: docker/login-action@v4
+        if: steps.v.outputs.skip != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        if: steps.v.outputs.skip != 'true'
+        with:
+          context: server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: APP_VERSION=${{ steps.v.outputs.version }}
+          tags: |
+            ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}
+            ${{ steps.v.outputs.image }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+      - name: Tag and GitHub release
+        if: steps.v.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/github-release.sh server "Server" true server deploy docker-compose.yml .env.example

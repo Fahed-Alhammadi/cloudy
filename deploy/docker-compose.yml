@@ -8,7 +8,7 @@ name: cloudy
 services:
   cloudy:
     image: cloudy:local
-    build: ../app
+    build: ../server
     container_name: cloudy
     restart: unless-stopped
     # Settings: edit the defaults here, or set them in a .env file next to this file
