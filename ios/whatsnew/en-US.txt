@@ -1,0 +1,3 @@
+• Long-press any file for its actions, or choose "Select" to pick several files and share, move, copy, favorite or delete them at once
+• New file view: list or grid with photo thumbnails, and search filters for images, videos, documents and more
+• Recent, Favorites, Shared and Trash are now in the More tab

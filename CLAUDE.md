@@ -16,7 +16,9 @@ LibreOffice for office previews, started by `server/docker/entrypoint.sh`), conf
 - `.github/workflows/` — `server.yml` / `android.yml` / `ios.yml` run only when their folder changes (path filters): test/build on
   every push and PR; on main, if the product's version has no tag yet, publish it and tag it (`scripts/github-release.sh`: tag +
   GitHub release with that folder's commits). `translations.yml` runs `i18n_check.py` when any strings change.
-- `scripts/version.py` — `status` / `bump <product> X.Y.Z` / `get` / `released`: the one place that reads and writes versions.
+- `scripts/version.py` — `status` / `bump <product> X.Y.Z` / `get` / `build` / `released`: the one place that reads and writes versions.
+  Release notes: `android/whatsnew/whatsnew-en-US` (Play upload) and `ios/whatsnew/en-US.txt` (`scripts/appstore-whatsnew.mjs`:
+  App Store Connect API → TestFlight "What to Test" + App Store "What's New"); update them with each bump.
 - `docs/index.html` — GitHub Pages site (app info for Google Play, screenshots in `docs/screenshots/`, links to
   `privacy-policy.html`, which Jekyll renders from the .md). `docs/ARCHITECTURE.md` — design notes; `docs/logo.svg` — app logo (used in README); `docs/app-icon.svg` → `app-icon-512.png` — Google Play icon (launcher artwork, square, RGBA); `docs/play/` — Play
   store screenshots + feature graphic (`render.py`, headless Chrome); `docs/privacy-policy.md` — app privacy policy
@@ -127,6 +129,7 @@ iOS: Swift 5 mode, SwiftUI + Observation, Quick Look, PhotosUI, VisionKit, Local
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-25: Store release notes from the repo (English): Play `whatsNewDirectory`, iOS notes via App Store Connect API.
 - 2026-10-25: Multi-select + long-press menus on web, Android (`Selection.kt`, list long-press → sheet) and iOS (List edit
   mode / grid check circles); web long-press on touch, checkboxes on phones while selecting. Tested in simulator, emulator, Chrome.
 - 2026-10-25: iOS Files tab like Android: only files (shortcuts moved to More), ⋯ per row, list/grid + `Thumbnails`, round +,

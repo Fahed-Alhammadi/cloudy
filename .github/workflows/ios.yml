@@ -5,6 +5,8 @@
 # Secrets: APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY (contents of AuthKey_<id>.p8; App Store Connect →
 #   Users and Access → Integrations → App Store Connect API, role Admin for cloud signing).
 # Without them the release job does nothing and doesn't tag, so the version stays unreleased.
+# Release notes: ios/whatsnew/en-US.txt (update it with each version bump) → TestFlight "What to Test" and, from the second
+#   App Store version on, "What's New" if that version already exists in App Store Connect (scripts/appstore-whatsnew.mjs).
 # macos-26 runner: App Store Connect only accepts builds made with the iOS 26 SDK (Xcode 26) or newer.
 name: iOS
 
@@ -15,6 +17,7 @@ on:
       - 'ios/**'
       - 'scripts/version.py'
       - 'scripts/github-release.sh'
+      - 'scripts/appstore-whatsnew.mjs'
       - '.github/workflows/ios.yml'
   pull_request:
     paths: *paths
@@ -66,6 +69,15 @@ jobs:
           export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
           printf '%s\n' "$ASC_PRIVATE_KEY" > "$ASC_KEY_PATH"
           ios/build.sh upload
+      - name: Release notes (TestFlight "What to Test", App Store "What's New")
+        if: steps.v.outputs.skip != 'true'
+        continue-on-error: true # optional: the build is already uploaded
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          export ASC_KEY_PATH="$RUNNER_TEMP/AuthKey_$ASC_KEY_ID.p8"
+          node scripts/appstore-whatsnew.mjs io.cloudy.app "$(scripts/version.py get ios)" "$(scripts/version.py build ios)" ios/whatsnew/en-US.txt
       - name: Tag and GitHub release
         if: steps.v.outputs.skip != 'true'
         env:

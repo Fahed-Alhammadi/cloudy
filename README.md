@@ -190,6 +190,10 @@ scripts/version.py bump server 1.10.1                # or: android 1.11.0 / ios 
 git commit -am "server 1.10.1: …" && git push        # the Server workflow tests, publishes and tags server-v1.10.1
 ```
 
+For the apps, update the **"What's new"** text in the same commit: `android/whatsnew/whatsnew-en-US` (Google Play,
+max 500 characters) and `ios/whatsnew/en-US.txt` (TestFlight "What to Test", and the App Store "What's New" from the
+second App Store version on). The workflows send them with the upload.
+
 A server-only fix therefore never touches the apps, and an app update never rebuilds the image. The store
 uploads stop at Play closed testing and TestFlight: promoting to production in Play Console and submitting for App
 Review stay manual. Required secrets are listed at the top of `.github/workflows/android.yml` and `ios.yml`; without

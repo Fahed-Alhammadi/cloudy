@@ -4,6 +4,7 @@
 #     closed-testing track (promote to production by hand in Play Console), then tag android-vX.Y.Z + GitHub release.
 # Secrets: ANDROID_KEYSTORE_BASE64 (base64 of android/cloudy-release.keystore), ANDROID_KEYSTORE_PASSWORD,
 #   ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD, PLAY_SERVICE_ACCOUNT_JSON (Play Developer API service account key).
+# Release notes: android/whatsnew/whatsnew-en-US (one file per Play listing language; update it with each version bump).
 # Variables (optional): PLAY_TRACK (default "alpha" = closed testing), PLAY_RELEASE_STATUS (default "completed").
 # Without the secrets the release job only builds what it can and doesn't tag, so the version stays unreleased.
 name: Android
@@ -100,6 +101,7 @@ jobs:
           packageName: io.cloudy.app
           releaseFiles: android/Cloudy-*.aab
           mappingFile: android/app/build/outputs/mapping/release/mapping.txt
+          whatsNewDirectory: android/whatsnew # "What's new" per language: whatsnew-<locale>, max 500 characters
           tracks: ${{ vars.PLAY_TRACK || 'alpha' }}
           status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
       - name: Tag and GitHub release

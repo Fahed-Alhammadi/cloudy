@@ -4,6 +4,7 @@
   scripts/version.py status                 versions and whether each one is released (run `git fetch --tags` first)
   scripts/version.py bump <product> X.Y.Z   set the version (Android versionCode / iOS build number go up by one)
   scripts/version.py get <product>          print the version (used by the workflows)
+  scripts/version.py build <product>        print the Android versionCode / iOS build number
   scripts/version.py released <product>     exit 0 if the current version already has a tag
 
 Products: server (server/package.json), android (versionName in android/app/build.gradle.kts),
@@ -19,6 +20,8 @@ FILES = {
     'android': ('android/app/build.gradle.kts', r'versionName = "([^"]+)"', r'versionCode = (\d+)'),
     'ios': ('ios/project.yml', r'MARKETING_VERSION: "([^"]+)"', r'CURRENT_PROJECT_VERSION: "(\d+)"'),
 }
+# Release notes sent with each store upload (see .github/workflows/android.yml and ios.yml).
+NOTES = {'android': 'android/whatsnew/whatsnew-en-US', 'ios': 'ios/whatsnew/en-US.txt'}
 # Before the split, server and Android were released together on plain vX.Y.Z tags; those count as released.
 LEGACY = {'server', 'android'}
 
@@ -89,6 +92,8 @@ def bump(product, version):
         write(lock, text)
     extra = f' (build {build_number(product)})' if build else ''
     print(f'{product}: {old} → {version}{extra}. Commit and push to main to release it as {tag(product, version)}.')
+    if product in NOTES:
+        print(f'Update the "What\'s new" text in {NOTES[product]} for this version (it goes to the store with the upload).')
 
 
 def main(args):
@@ -107,6 +112,8 @@ def main(args):
     product = rest[0]
     if cmd == 'get':
         print(get(product))
+    elif cmd == 'build' and FILES[product][2]:
+        print(build_number(product))
     elif cmd == 'released':
         sys.exit(0 if released(product) else 1)
     elif cmd == 'bump' and len(rest) == 2:
