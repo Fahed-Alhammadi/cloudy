@@ -1,0 +1,38 @@
+{
+  "name": "cloudy-desktop",
+  "productName": "Cloudy",
+  "version": "1.0.0",
+  "description": "Cloudy desktop sync client: keeps a folder on your computer in sync with your Cloudy server.",
+  "license": "MIT",
+  "author": "Fahed Alhammadi",
+  "homepage": "https://github.com/Fahed-Alhammadi/cloudy",
+  "private": true,
+  "type": "module",
+  "main": "out/main.cjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p . && node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p .",
+    "test": "node --test test/*.test.ts",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "electron": "44.7.2",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "electron-winstaller": false
+  }
+}

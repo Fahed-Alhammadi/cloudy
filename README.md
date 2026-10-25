@@ -5,7 +5,7 @@
 <h1 align="center">Cloudy</h1>
 
 Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
-database inside), a browser app, and a native Android app on Google Play.
+database inside), a browser app, native Android and iPhone apps, and a desktop sync app for macOS, Windows and Linux.
 
 ## Screenshots
 
@@ -38,6 +38,11 @@ database inside), a browser app, and a native Android app on Google Play.
   - installed and updated through Google Play.
 - **iPhone app** (SwiftUI, iOS 17+, App Store): files with Quick Look previews, uploads from Photos and Files,
   document scanner, sharing, calendar, contacts, text editing, Face ID app lock. See [ios/README.md](ios/README.md).
+- **Desktop sync app** (macOS, Windows, Linux): keeps a folder on your computer in two-way sync with your Cloudy
+  files, like Dropbox or the Nextcloud client: pick which folders to sync, changes go up and down within seconds,
+  renames and moves aren't re-transferred, edits in two places keep both copies, deletions go to the trash. Sits in
+  the menu bar / system tray and updates itself from GitHub releases. Download it from the
+  [releases](https://github.com/Fahed-Alhammadi/cloudy/releases) (`desktop-v…`). See [desktop/README.md](desktop/README.md).
 - **Live updates:** file lists in the browser and the phone apps update by themselves when files change
   anywhere (another device, a share, WebDAV), like Google Drive.
 - **Office documents:** Word, Excel, PowerPoint and OpenDocument files can be viewed (read-only) in the browser
@@ -170,9 +175,12 @@ docker compose pull && docker compose up -d
 
 The database schema migrates itself at startup. Your data stays in the volumes.
 
+**Desktop app.** It checks GitHub once a day for a newer `desktop-v…` release, downloads it in the background and
+installs it when you restart or quit (Settings → Check for updates checks right away).
+
 ## Releases (maintainers)
 
-The server, the Android app and the iPhone app are released **independently**. Each has its own version, its own
+The server, the Android app, the iPhone app and the desktop app are released **independently**. Each has its own version, its own
 GitHub Actions workflow and its own tag:
 
 | Product | Folder | Version lives in | Published to | Tag |
@@ -180,13 +188,14 @@ GitHub Actions workflow and its own tag:
 | Server | `server/` | `server/package.json` | `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` + `:latest` | `server-vX.Y.Z` |
 | Android | `android/` | `versionName`/`versionCode` in `android/app/build.gradle.kts` | Google Play (closed testing) | `android-vX.Y.Z` |
 | iPhone | `ios/` | `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in `ios/project.yml` | App Store Connect (TestFlight) | `ios-vX.Y.Z` |
+| Desktop | `desktop/` | `desktop/package.json` | GitHub release: macOS .dmg/.pkg (signed + notarized), Windows .exe, Linux AppImage/.deb | `desktop-vX.Y.Z` |
 
 Each workflow runs only when its folder changes: every push and pull request is tested and built. Nothing is
 published until you **bump the version**:
 
 ```sh
 git fetch --tags && scripts/version.py status       # current versions, and which are released
-scripts/version.py bump server 1.10.1                # or: android 1.11.0 / ios 1.0.1 (build numbers go up by one)
+scripts/version.py bump server 1.10.1                # or: android 1.11.0 / ios 1.0.1 / desktop 1.0.1
 git commit -am "server 1.10.1: …" && git push        # the Server workflow tests, publishes and tags server-v1.10.1
 ```
 
@@ -196,7 +205,7 @@ second App Store version on). The workflows send them with the upload.
 
 A server-only fix therefore never touches the apps, and an app update never rebuilds the image. The store
 uploads stop at Play closed testing and TestFlight: promoting to production in Play Console and submitting for App
-Review stay manual. Required secrets are listed at the top of `.github/workflows/android.yml` and `ios.yml`; without
+Review stay manual. Required secrets are listed at the top of `.github/workflows/android.yml`, `ios.yml` and `desktop.yml`; without
 them those workflows build but don't publish or tag. Details: [android/README.md](android/README.md),
 [ios/README.md](ios/README.md).
 
@@ -290,11 +299,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how Cloudy works inside.
 server/              server (Node.js/TypeScript) + HTML5 web app (server/public) → Docker image   tag server-vX.Y.Z
 android/             native Android app (Kotlin, Jetpack Compose) → Google Play           tag android-vX.Y.Z
 ios/                 native iPhone app (Swift, SwiftUI) → App Store                      tag ios-vX.Y.Z
+desktop/             desktop sync app (Electron, TypeScript) → GitHub releases           tag desktop-vX.Y.Z
 deploy/              docker-compose.yml that builds the image from source
 docs/                website, privacy policy, architecture notes
 tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests, translation check
-scripts/             version.py (versions of all three), github-release.sh (tag + release notes)
-.github/workflows/   server.yml, android.yml, ios.yml (each: test → publish on version bump), translations.yml
+scripts/             version.py (versions of all four), github-release.sh (tag + release notes)
+.github/workflows/   server.yml, android.yml, ios.yml, desktop.yml (each: test → publish on version bump), translations.yml
 ```
 
 ## License

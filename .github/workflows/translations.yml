@@ -1,4 +1,4 @@
-# Translations are shared by the web app, Android and iOS: checks they're complete when any of them change.
+# Translations are shared by the web app, Android, iOS and the desktop app: checks they're complete when any of them change.
 name: Translations
 
 on:
@@ -11,6 +11,8 @@ on:
       - 'android/app/src/main/java/io/cloudy/app/data/Lang.kt'
       - 'ios/Cloudy/Resources/*.xcstrings'
       - 'ios/Cloudy/Info.plist'
+      - 'desktop/i18n/**'
+      - 'desktop/src/**'
       - 'tests/i18n_check.py'
       - '.github/workflows/translations.yml'
   pull_request:

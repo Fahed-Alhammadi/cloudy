@@ -27,3 +27,6 @@ CLAUDE.md
 # Store API keys (App Store Connect .p8, Google Play service account .json): keep them in Keys/, never commit
 Keys/
 keys/
+
+# Desktop app build output (desktop/dist is covered by dist/)
+desktop/out/

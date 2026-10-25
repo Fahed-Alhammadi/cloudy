@@ -1,0 +1,91 @@
+# Cloudy desktop
+
+Sync client for macOS, Windows and Linux (Electron + TypeScript). It keeps one folder on the computer in two-way sync
+with the user's Cloudy files. It is a menu bar / system tray app with a small settings window. Files only: no calendar
+or contacts.
+
+## How sync works
+
+`src/main/sync.ts` (no Electron imports) compares three trees by relative path on each pass:
+
+- the **local folder**;
+- the **server**, read through `GET /api/nodes/:id`. Each folder's listing is cached and only re-read when its etag
+  changes, and etags change all the way up the tree on every edit;
+- **base**, which is both sides as of the last sync, saved in `sync-state.json` in the app's data folder.
+
+Each side "changed" if it differs from base. Here is what each case does:
+
+| Case | Result |
+|---|---|
+| One side changed | The change is copied to the other side. Uploads are chunked; downloads go to a temp file first. |
+| Both sides changed | `name (conflicted copy <date>).ext` is kept next to the server version. |
+| Same size, no history | The bytes are compared first, so a first sync into a folder that already has the files doesn't duplicate them. |
+| Renamed or moved | Detected by inode (local) or node id (server) and repeated on the other side, not transferred again. |
+| Deleted | Goes to the server trash or the computer's trash. |
+| ≥ 100 files and ≥ half the folder deleted at once | The app asks first. "Keep" copies the files back. |
+
+A pass is triggered by:
+
+- the folder watcher (`fs.watch`, recursive);
+- the server's live events (`/api/events`, SSE);
+- a check every 5 minutes;
+- waking from sleep.
+
+Ignored names: `.DS_Store`, `Thumbs.db`, `desktop.ini`, Office lock files, `.cloudy-tmp-*`. On Windows, names the
+filesystem can't hold, and names that differ only by upper/lower case on macOS and Windows, are listed under
+"Not synced".
+
+Sign-in uses `POST /api/auth/token` (an app password named "Desktop (<hostname>)"). The token is encrypted with
+`safeStorage` (the OS keychain).
+
+## Layout
+
+```
+src/main/main.ts      tray, window, IPC handlers, login item
+src/main/sync.ts      sync engine
+src/main/api.ts       Cloudy API client (chunked upload, download, SSE)
+src/main/store.ts     settings.json / sync-state.json (userData), token encryption
+src/main/updater.ts   updates from the newest desktop-v* GitHub release (electron-updater, generic feed)
+src/main/i18n.ts      t() + LANGUAGES; translations in i18n/<lang>.json (English keys, as on the web)
+src/preload/          contextBridge: cloudy.call(name, ...args), cloudy.onUpdate(fn)
+src/ui/               settings window (plain HTML/JS/CSS, no framework)
+assets/               app icon (icon.png 1024 px), tray icons (trayTemplate = macOS menu bar)
+test/sync.test.ts     sync tests: two engines against a real server
+```
+
+## Develop
+
+```sh
+cd desktop && npm install
+npm start                                   # build + run (from VS Code's terminal: env -u ELECTRON_RUN_AS_NODE npm start)
+CLOUDY_USER_DATA=/tmp/cloudy-dev npm start  # separate settings/profile for development runs
+npm run typecheck
+CLOUDY_TEST_URL=http://localhost:8080 CLOUDY_TEST_USER=admin CLOUDY_TEST_PASSWORD=… npm test
+npm run dist:mac | dist:win | dist:linux    # packages in dist/ (unsigned locally: CSC_IDENTITY_AUTO_DISCOVERY=false)
+```
+
+New texts: wrap them in `t('…')` and add them to all four `i18n/*.json` files (`python3 tests/i18n_check.py`).
+
+## Release
+
+`scripts/version.py bump desktop X.Y.Z`, then commit and push to main. `.github/workflows/desktop.yml` runs the
+tests, builds the packages listed below, notarizes, and publishes the GitHub release `desktop-vX.Y.Z`, with all
+packages and the `latest*.yml` files attached in one step.
+
+| Platform | Packages |
+|---|---|
+| macOS | `.dmg` + `.zip` (arm64, x64) and a universal `.pkg`, all signed with Developer ID and notarized |
+| Windows | NSIS `.exe` (x64) |
+| Linux | AppImage + `.deb` (x64, arm64) |
+
+Installed apps find the release by its `desktop-v` tag, because this repository also has server, Android and iOS
+releases. They update themselves on macOS (from the `.zip`), on Windows, from an AppImage and from a `.deb`.
+
+The macOS secrets are listed at the top of the workflow:
+
+- `MACOS_CERTIFICATE_P12`
+- `MACOS_INSTALLER_CERTIFICATE_P12`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`
+
+Windows builds are unsigned, so SmartScreen shows "Unknown publisher" until a code-signing certificate is added.

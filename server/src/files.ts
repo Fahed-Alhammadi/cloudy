@@ -244,8 +244,25 @@ export async function breadcrumb(node: Node, acc: Access): Promise<{ id: number;
 
 // ---------------------------------------------------------------- mutations
 
+/**
+ * Locks `startId` and all its ancestors, always in id order. Concurrent writes in different folders share ancestors
+ * (at least the root); taking those row locks in any other order deadlocks (parallel uploads from the desktop client
+ * or the browser). Call it before touching any of these rows in a transaction.
+ */
+async function lockChain(db: Db, startId: number): Promise<void> {
+  await q(
+    `WITH RECURSIVE a AS (
+       SELECT id, parent_id FROM nodes WHERE id = $1
+       UNION ALL SELECT n.id, n.parent_id FROM nodes n JOIN a ON n.id = a.parent_id)
+     SELECT id FROM nodes WHERE id IN (SELECT id FROM a) ORDER BY id FOR UPDATE`,
+    [startId],
+    db,
+  );
+}
+
 /** Adds `delta` to the size of `startId` and all its ancestors and refreshes their etags. */
 async function propagate(db: Db, startId: number, delta: number): Promise<void> {
+  await lockChain(db, startId);
   await q(
     `WITH RECURSIVE a AS (
        SELECT id, parent_id FROM nodes WHERE id = $1
@@ -319,7 +336,7 @@ export async function writeFile(
   let pruned: string[] = [];
   try {
     const out = await tx(async (db) => {
-      await q(`SELECT id FROM nodes WHERE id = $1 FOR UPDATE`, [parent.id], db);
+      await lockChain(db, parent.id); // serializes writes to this folder (same name) without deadlocks
       const existing = await childByName(parent.id, name, db);
       if (existing?.is_dir) throw new HttpError(409, 'A folder with that name exists');
       await checkQuota(db, parent.owner, size);

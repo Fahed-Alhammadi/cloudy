@@ -4,10 +4,11 @@ title: Privacy Policy
 
 # Privacy Policy
 
-Last updated: October 24, 2026
+Last updated: October 25, 2026
 
-This privacy policy explains how the **Cloudy** apps for Android (package `io.cloudy.app`) and iPhone (bundle ID `io.cloudy.app`)
-handle your information. The table below describes the Android app; [the iPhone app](#iphone-app) section lists where it differs.
+This privacy policy explains how the **Cloudy** apps for Android (package `io.cloudy.app`), iPhone (bundle ID `io.cloudy.app`) and
+desktop computers (macOS, Windows and Linux, `io.cloudy.desktop`) handle your information. The table below describes the Android app;
+the [iPhone app](#iphone-app) and [desktop app](#desktop-app) sections list where they differ.
 Cloudy is developed by Fahed Alhammadi ("we", "us"). The source code is public at
 <https://github.com/Fahed-Alhammadi/cloudy>.
 
@@ -58,16 +59,34 @@ The iPhone app works like the Android app above, with these differences:
 - The app contains no advertising, analytics or tracking, and does not use Apple's advertising identifier. Apple's privacy policy applies
   to the App Store.
 
+## Desktop app
+
+The desktop app (macOS, Windows, Linux) only syncs files; it has no calendar, contacts, photo backup or scanner. Where it differs:
+
+- **Files:** it keeps a folder you choose on your computer in sync with your files on your server: new and changed files are uploaded,
+  changes on the server are downloaded, and deletions on either side are repeated on the other (to the server's trash or your
+  computer's trash). It reads only that folder, and only the server folders you leave selected are copied to your computer.
+- **Device name:** your computer's name (for example "Desktop (my-laptop)") labels the device token on your server.
+- **Device token:** encrypted with your operating system's keychain (Keychain on macOS, the Windows data protection API, the Secret
+  Service on Linux) and stored with the app's settings on this computer. Signing out revokes it on the server.
+- **Language** follows your account's language on your server, else your computer's.
+- **Updates:** see below. There is no advertising, analytics or tracking.
+
 ## App updates
 
-The apps are updated by Google Play and the App Store; they do not check for or download updates themselves. Google's and Apple's privacy policies apply to their stores.
+The Android and iPhone apps are updated by Google Play and the App Store; they do not check for or download updates themselves. Google's and Apple's privacy policies apply to their stores.
+
+The desktop app checks for a new version once a day (and when you click *Check for updates*) by asking GitHub for the list of
+Cloudy releases, and downloads new versions from GitHub. These requests carry no account or file information; like any website,
+GitHub sees your IP address and the app's name and version ([GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)).
 
 ## Sharing of information
 
-We do not sell, rent or share your information with anyone, and we do not have access to it. The app sends data only to:
+We do not sell, rent or share your information with anyone, and we do not have access to it. The apps send data only to:
 
 - the Cloudy server you sign in to (see above);
-- Google Play services, only when you use the document scanner (see above).
+- Google Play services, only when you use the document scanner (see above);
+- GitHub, only for the desktop app's update check and downloads (see [App updates](#app-updates)).
 
 When you share a file or a link, or export contacts, the information goes only to the people or apps you choose.
 

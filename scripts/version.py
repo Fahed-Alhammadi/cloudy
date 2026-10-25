@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Versions of the three products (stdlib only). Each product is released on its own tag: <product>-vX.Y.Z.
+"""Versions of the four products (stdlib only). Each product is released on its own tag: <product>-vX.Y.Z.
 
   scripts/version.py status                 versions and whether each one is released (run `git fetch --tags` first)
   scripts/version.py bump <product> X.Y.Z   set the version (Android versionCode / iOS build number go up by one)
@@ -8,7 +8,7 @@
   scripts/version.py released <product>     exit 0 if the current version already has a tag
 
 Products: server (server/package.json), android (versionName in android/app/build.gradle.kts),
-ios (MARKETING_VERSION in ios/project.yml). Pushing a bump to main makes CI publish that product.
+ios (MARKETING_VERSION in ios/project.yml), desktop (desktop/package.json). Pushing a bump to main makes CI publish that product.
 """
 import os, re, subprocess, sys
 
@@ -19,6 +19,7 @@ FILES = {
     'server': ('server/package.json', r'^  "version": "([^"]+)"', None),
     'android': ('android/app/build.gradle.kts', r'versionName = "([^"]+)"', r'versionCode = (\d+)'),
     'ios': ('ios/project.yml', r'MARKETING_VERSION: "([^"]+)"', r'CURRENT_PROJECT_VERSION: "(\d+)"'),
+    'desktop': ('desktop/package.json', r'^  "version": "([^"]+)"', None),
 }
 # Release notes sent with each store upload (see .github/workflows/android.yml and ios.yml).
 NOTES = {'android': 'android/whatsnew/whatsnew-en-US', 'ios': 'ios/whatsnew/en-US.txt'}
@@ -84,8 +85,8 @@ def bump(product, version):
         n = build_number(product) + 1
         text = sub_once(text, build, lambda m: m.group(0).replace(m.group(1), str(n)), path)
     write(path, text)
-    if product == 'server':  # keep the lock file's own version in step (top level and packages[""])
-        lock = 'server/package-lock.json'
+    if product in ('server', 'desktop'):  # keep the lock file's own version in step (top level and packages[""])
+        lock = f'{product}/package-lock.json'
         text = read(lock)
         text = re.sub(r'^(  "version": ")[^"]+(")', rf'\g<1>{version}\2', text, count=1, flags=re.M)
         text = re.sub(r'^(      "version": ")[^"]+(")', rf'\g<1>{version}\2', text, count=1, flags=re.M)
