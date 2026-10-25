@@ -39,57 +39,6 @@ SIMCTL_CHILD_CLOUDY_SERVER=http://localhost:8080 SIMCTL_CHILD_CLOUDY_TOKEN=<devi
   xcrun simctl launch booted io.cloudy.app
 ```
 
-## Publishing on the App Store
-
-Once your Apple Developer account is active:
-
-1. **Bundle ID.** In [developer.apple.com → Identifiers](https://developer.apple.com/account/resources/identifiers), register
-   `io.cloudy.app` (no extra capabilities needed). If it's taken, change `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`.
-2. **App record.** In [App Store Connect](https://appstoreconnect.apple.com) → *Apps → +*: name *Cloudy* (or a variant if
-   taken), primary language English, that bundle ID, SKU e.g. `cloudy-ios`.
-3. **Archive and upload.** `DEVELOPMENT_TEAM=<your Team ID> ios/build.sh archive`, then in Xcode → *Window →
-   Organizer* → *Distribute App → App Store Connect*. (Or Xcode → *Product → Archive*.) The build appears in TestFlight
-   after processing. Test it there first.
-4. **App information:**
-   - Category: Productivity. Age rating: answer "None" to everything (4+).
-   - Privacy policy URL: `https://fahed-alhammadi.github.io/cloudy/privacy-policy.html`
-   - Support URL: `https://github.com/Fahed-Alhammadi/cloudy/issues` (or the GitHub Pages site).
-   - **App Privacy:** choose *"No, we do not collect data from this app"*. Data goes only to the user's own server,
-     which the developer doesn't operate (this matches `PrivacyInfo.xcprivacy`).
-   - Export compliance is already answered in `Info.plist` (`ITSAppUsesNonExemptEncryption = NO`: only HTTPS through iOS).
-5. **Screenshots:** iPhone 6.9" (1320×2868, e.g. iPhone 17 Pro Max / 18 Pro Max simulator), at least 3. Use the
-   simulator shortcuts above with a demo account and `xcrun simctl io booted screenshot shot.png`.
-6. **App Review sign-in (essential).** The app can't do anything without a server, so Review needs one. Run a Cloudy
-   server reachable over **HTTPS** with demo content (folders, a photo, a PDF, an event, a contact), create a normal user
-   for Apple, and enter the server address, username and password under *App Review Information → Sign-in required*.
-   Add a note such as:
-   > Cloudy is a client for self-hosted Cloudy servers (open source: github.com/Fahed-Alhammadi/cloudy). Enter the server
-   > address, username and password above on the sign-in screen. Accounts are created by the server's administrator, so the
-   > app has no sign-up and no in-app account deletion (users ask their administrator; see the privacy policy).
-   Keep that server and account working until the review is done and for later updates.
-7. Submit for review.
-
-**Guidelines this app is built to respect:** no in-app account creation (so in-app account deletion, 5.1.1(v), doesn't
-apply), no payments or links to buy anything (3.1), no tracking/analytics/ads (5.1.2), permission texts only for features
-that use them (camera for the scanner, Face ID, add-to-Photos, local network), the system photo picker instead of full
-library access, HTTPS required except on local networks, no mention of other platforms in the UI (2.3.10), privacy
-policy linked in the app (sign-in screen and *More*).
-
-## Releases
-
-The iPhone app has its own version, independent of the server and Android.
-
-1. `scripts/version.py bump ios X.Y.Z` (from the repo root): sets `MARKETING_VERSION` and raises the build number
-   (`CURRENT_PROJECT_VERSION`) by one. App Store Connect rejects a build number it has already seen.
-2. Commit and push to main. `.github/workflows/ios.yml` archives, signs and uploads the build to App Store Connect,
-   then tags `ios-vX.Y.Z`. It appears in TestFlight after processing; submit it for App Review by hand.
-
-One-time setup for the automatic upload (after the steps above have created the app in App Store Connect):
-App Store Connect → *Users and Access → Integrations → App Store Connect API* → generate a key with the **Admin** role
-(needed so CI can create its signing certificate), then add repository secrets `ASC_KEY_ID`, `ASC_ISSUER_ID`,
-`ASC_PRIVATE_KEY` (the contents of the downloaded `AuthKey_<id>.p8`) and `APPLE_TEAM_ID`. Without them the workflow
-only builds. Locally, `DEVELOPMENT_TEAM=<id> ios/build.sh upload` does the same with your Xcode account.
-
 ## Code map
 
 | Path | What it does |

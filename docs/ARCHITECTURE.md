@@ -1,9 +1,10 @@
 # Cloudy architecture
 
-Cloudy is a self-hosted cloud for files, sharing, calendars and contacts. It has three parts:
+Cloudy is a self-hosted cloud for files, sharing, calendars and contacts. It has these parts:
 - one container running the Node.js server and its own PostgreSQL database;
-- a browser app written in plain HTML5;
-- a native Android app.
+- a browser app written in plain HTML5, served by the server;
+- native apps for Android (Kotlin, Jetpack Compose) and iPhone (Swift, SwiftUI);
+- a desktop sync app for macOS, Windows and Linux (Electron, TypeScript).
 
 This document explains how the pieces fit together and why they are built the way they are.
 
@@ -12,7 +13,8 @@ This document explains how the pieces fit together and why they are built the wa
 ```
                  ┌───────────────── Cloudy server (Node 24, TypeScript) ─────────────────┐
 browser ───────▶ │  /            static HTML5 app (public/)                                   │
-Android app ───▶ │  /api/*       JSON API (session cookie or device token)                    │
+Android, iPhone, │  /api/*       JSON API (session cookie or device token)                    │
+desktop apps ──▶ │  /api/events  live updates (Server-Sent Events)                            │
                  │  /api/public  public share links (token + optional password)               │
 WebDAV / CalDAV  │                                                                            │
 / CardDAV apps ─▶│  /dav/*       WebDAV files, CalDAV calendars, CardDAV address books         │
@@ -89,7 +91,7 @@ Access rules:
 | `/.well-known/caldav`, `/.well-known/carddav` | Auto-discovery redirects |
 
 Calendars and contacts are stored as raw iCalendar/vCard text and parsed with `ical.js`. The browser and the
-Android app use a JSON API that converts to and from these formats, and expands repeating events.
+phone apps use a JSON API that converts to and from these formats, and expands repeating events.
 
 Change tracking for sync: a change log (`dav_changes`) plus a counter per collection lets clients fetch only
 what changed since their last sync.
@@ -99,7 +101,7 @@ what changed since their last sync.
 | Client | How it signs in |
 |---|---|
 | Browser | Password or passkey → session cookie (HttpOnly, SameSite=Lax, Secure behind HTTPS) |
-| Android app | `POST /api/auth/token` → device token, sent as `Authorization: Bearer …` |
+| Android, iPhone and desktop apps | `POST /api/auth/token` → device token, sent as `Authorization: Bearer …` (kept in app-private storage, the iOS Keychain, or encrypted with the OS keychain on desktop) |
 | WebDAV / CalDAV / CardDAV apps | HTTP Basic with the account password or an app password |
 
 - **Two-factor authentication** uses TOTP (RFC 6238: SHA-1, 6 digits, 30 s, ±1 step), implemented in `totp.ts`.
@@ -124,20 +126,18 @@ what changed since their last sync.
 
 ## 6. Updates
 
-Each product (server, Android, iOS) has its own version and workflow and is published when its version is bumped
-on main (`scripts/version.py bump`), tagged `server-v…`, `android-v…` or `ios-v…`.
+Each product (server, Android, iPhone, desktop) has its own version and is released on its own, tagged
+`server-v…`, `android-v…`, `ios-v…` or `desktop-v…`.
 
-**Server.** A new server version publishes `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` and `:latest`. Run
-`docker compose pull && docker compose up -d` to update.
-- `/status` reports the running version.
-- The database and `/data` live in volumes, so they survive updates. The schema is applied idempotently at every
-  start.
-
-**Android app (Google Play).**
-1. A new `versionName` on main builds the signed `.aab` in CI (`.github/workflows/android.yml`) and, when
-   `PLAY_SERVICE_ACCOUNT_JSON` is set, uploads it to the Play closed-testing track.
-2. Google Play installs and updates the app; the app has no updater of its own. Play App Signing holds the app
-   key; `cloudy-release.keystore` is the upload key.
+- **Server:** `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` and `:latest`. `docker compose pull && docker compose up -d`
+  updates it. `/status` reports the running version. The database and `/data` live in volumes, and the schema is
+  applied idempotently at every start.
+- **Android and iPhone:** updated by Google Play and the App Store (TestFlight during the beta). The apps have no
+  updater of their own.
+- **Desktop:** each version is a GitHub release with every package and electron-updater's `latest*.yml` files. The
+  app asks the GitHub API for the newest `desktop-v*` release (the repository has other products' releases too),
+  points electron-updater at that release, downloads in the background (SHA-512 checked) and installs on restart or
+  quit. macOS builds are signed with a Developer ID and notarized.
 
 ## 7. Security notes
 
@@ -149,8 +149,9 @@ on main (`scripts/version.py bump`), tagged `server-v…`, `android-v…` or `io
 
 - Folder ZIP downloads have no ZIP64 support, so they must stay under 4 GB and 65,535 entries.
 - Repeating events are edited as a whole series.
-- No server-side encryption, external storage, thumbnails, full-text search, or calendar
-  sharing yet. Passkeys are web-only (no Android Credential Manager sign-in).
+- No server-side encryption, external storage, full-text search, or calendar sharing yet. Passkeys are web-only.
+- The desktop app syncs the user's own files (not "shared with me") and downloads every selected file; there are no
+  online-only placeholders (macOS File Provider / Windows Cloud Files) yet.
 
 ## 9. Live updates
 
@@ -161,7 +162,8 @@ who can see each changed folder (owner + user/group shares on it or an ancestor)
 `event: change` / `{folders, shares}` over Server-Sent Events at `GET /api/events` (pings every 25 s,
 `X-Accel-Buffering: no`). Because the triggers sit in the database, every path — JSON API, WebDAV, background
 jobs, office saves — is covered. Clients reload the view only when it shows a changed folder, and the web app
-waits while a dialog, menu or selection is open. Android collects the stream while the app is in the foreground.
+waits while a dialog, menu or selection is open. The phone apps collect the stream while they're in the
+foreground; the desktop app keeps it open and starts a sync pass on every event.
 
 ## 10. Office previews (LibreOffice)
 
@@ -209,3 +211,24 @@ detects the format and encoding (UTF-8, UTF-16 with BOM, else Windows-1252).
 URLs), `PROPFIND` Depth 0 with Basic auth on `/dav/files/<user>/` and `/dav/`, `/.well-known/caldav|carddav`
 without following redirects, one full upload chunk of a throwaway upload session that is then deleted (skipped on
 metered networks), and the first line of `/api/events` within 8 s. Each result carries a proxy-specific fix.
+
+## 14. Desktop sync
+
+The desktop app (`desktop/src/main/sync.ts`) keeps one local folder in sync with the user's files. Each pass compares
+three trees by relative path: the **local folder**, the **server** (`GET /api/nodes/:id`, with each folder's listing
+cached and re-read only when the folder's etag changed, so an unchanged tree costs one request), and **base**, which
+is both sides as they were after the last pass.
+
+- A side has changed if it differs from base. A change on one side is copied to the other. Uploads use the
+  resumable chunk API. Downloads go to a temp file next to the target and are renamed into place.
+- Changes on both sides keep both: the local version becomes `name (conflicted copy <date>).ext` and is uploaded
+  as a new file. Files of equal size with no shared history (a first sync into a filled folder) are compared byte
+  for byte first.
+- Renames and moves are recognised by inode (local) and node id (server) and repeated with a rename or a
+  `PATCH /api/nodes/:id`, so a moved folder isn't transferred again.
+- Deletions go to the server trash or the computer's trash. If at least 100 files and half the folder would be
+  deleted at once, the app asks first; "keep" copies them back. A missing sync folder (for example an unmounted
+  drive) stops syncing instead of deleting anything on the server.
+- A pass is started by the folder watcher, by live events, every 5 minutes, and after waking from sleep.
+- Concurrent uploads lock their folder's ancestor chain in id order on the server (`lockChain` in `files.ts`),
+  because every write updates the sizes and etags of all ancestors.

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cloudy — your own cloud</title>
-  <meta name="description" content="Cloudy is a self-hosted cloud for files, sharing, calendars and contacts, with native Android and iPhone apps.">
+  <meta name="description" content="Cloudy is a self-hosted cloud for files, sharing, calendars and contacts, with Android and iPhone apps and a desktop sync app for macOS, Windows and Linux.">
   <link rel="icon" href="logo.svg" type="image/svg+xml">
   <style>
     :root {
@@ -49,6 +49,9 @@
       width: 220px; height: auto; border-radius: 18px; border: 1px solid var(--border);
       background: var(--surface); display: block;
     }
+    .shots.desktop figure { flex-basis: 360px; }
+    .shots.desktop img { width: 360px; border-radius: 10px; }
+    section > h3 { margin: 18px 0 10px; }
     .shots figcaption { color: var(--muted); font-size: .9rem; margin-top: 6px; }
     ul.plain { padding-left: 20px; margin: 0; }
     footer {
@@ -67,6 +70,7 @@
       <div class="buttons">
         <a class="btn primary" href="https://play.google.com/store/apps/details?id=io.cloudy.app">Get it on Google Play</a>
         <a class="btn primary" href="https://testflight.apple.com/join/X1M6sYZm">Join the iPhone beta (TestFlight)</a>
+        <a class="btn primary" href="https://github.com/Fahed-Alhammadi/cloudy/releases?q=desktop-v&amp;expanded=true">Download for Mac, Windows and Linux</a>
         <a class="btn" href="https://github.com/Fahed-Alhammadi/cloudy">Source code</a>
         <a class="btn" href="privacy-policy.html">Privacy policy</a>
       </div>
@@ -76,18 +80,21 @@
     <section>
       <h2>About the app</h2>
       <p>
-        Cloudy is the Android and iPhone app for a self-hosted <strong>Cloudy server</strong>. You sign in to a server that you,
-        your company or someone you trust runs, and the app talks only to that server. The developer never receives
-        your files, photos, calendars or contacts. The app has no ads, no analytics and no tracking.
+        Cloudy has apps for Android, iPhone and the desktop (macOS, Windows and Linux) for a self-hosted <strong>Cloudy
+        server</strong>. You sign in to a server that you, your company or someone you trust runs, and the apps talk only
+        to that server. The developer never receives your files, photos, calendars or contacts. The apps have no ads, no
+        analytics and no tracking.
       </p>
       <p>
-        The server is free and open source and runs as a single Docker container. It also includes a web app and
-        WebDAV, CalDAV and CardDAV support for desktop and other mobile clients.
+        The desktop app keeps a folder on your computer in sync with your Cloudy files, like Dropbox. The server is
+        free and open source and runs as a single Docker container. It also includes a web app and WebDAV, CalDAV and
+        CardDAV support for other apps.
       </p>
     </section>
 
     <section>
-      <h2>Screenshots <span class="tag">Android</span></h2>
+      <h2>Screenshots</h2>
+      <h3>Android</h3>
       <div class="shots">
         <figure><img src="screenshots/files.png" alt="File browser" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Files</figcaption></figure>
         <figure><img src="screenshots/preview.png" alt="Text editor" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Text editor</figcaption></figure>
@@ -95,6 +102,19 @@
         <figure><img src="screenshots/photos.png" alt="Photo backup settings" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Photo backup</figcaption></figure>
         <figure><img src="screenshots/calendar.png" alt="Calendar" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Calendar</figcaption></figure>
         <figure><img src="screenshots/contacts.png" alt="Contacts" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Contacts</figcaption></figure>
+      </div>
+          <h3>iPhone</h3>
+      <div class="shots">
+        <figure><img src="screenshots/iphone/files.jpg" alt="File browser" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Files</figcaption></figure>
+        <figure><img src="screenshots/iphone/folder.jpg" alt="Folder in a grid" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Grid view</figcaption></figure>
+        <figure><img src="screenshots/iphone/share.jpg" alt="Sharing a file" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Sharing</figcaption></figure>
+        <figure><img src="screenshots/iphone/editor.jpg" alt="Text editor" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Text editor</figcaption></figure>
+        <figure><img src="screenshots/iphone/calendar.jpg" alt="Calendar" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Calendar</figcaption></figure>
+        <figure><img src="screenshots/iphone/contacts.jpg" alt="Contacts" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Contacts</figcaption></figure>
+      </div>
+      <h3>Mac, Windows and Linux</h3>
+      <div class="shots desktop">
+        <figure><img src="screenshots/desktop.png" alt="Desktop app: sync status, folders to sync and recent activity" loading="lazy" onerror="this.parentElement.remove()"><figcaption>Desktop sync</figcaption></figure>
       </div>
     </section>
 
@@ -108,6 +128,7 @@
         <div class="card"><h3>Offline files<span class="tag">Android</span></h3><p>Mark files as available offline and open them without a connection.</p></div>
         <div class="card"><h3>Photo backup<span class="tag">Android</span></h3><p>Upload new photos and videos to your server automatically, on Wi-Fi only if you like.</p></div>
         <div class="card"><h3>Calendar and contacts</h3><p>View and edit events and contacts. Import contacts from .vcf or .csv files and export them as .vcf.</p></div>
+        <div class="card"><h3>Desktop sync<span class="tag">Mac · Windows · Linux</span></h3><p>A Cloudy folder on your computer that stays in sync both ways. Choose which folders to sync. Renames and moves aren't transferred again, edits in two places keep both copies, and deleted files go to the trash. It updates itself.</p></div>
         <div class="card"><h3>Live updates</h3><p>File lists refresh by themselves when something changes on another device.</p></div>
         <div class="card"><h3>Security</h3><p>Optional app lock with Face ID, fingerprint or screen lock, two-factor authentication, a list of signed-in devices you can revoke, and HTTPS connections to your server.</p></div>
         <div class="card"><h3>Your language</h3><p>English, العربية, Deutsch, Français and Español, chosen in the app and shared with the web interface.</p></div>
@@ -121,7 +142,11 @@
         <li><strong>Android:</strong> install Cloudy from <a href="https://play.google.com/store/apps/details?id=io.cloudy.app">Google Play</a>.</li>
         <li><strong>iPhone:</strong> install Apple's <a href="https://apps.apple.com/app/testflight/id899247664">TestFlight</a> app, then open
           <a href="https://testflight.apple.com/join/X1M6sYZm">the Cloudy beta invitation</a> on your iPhone and tap <em>Accept</em> and <em>Install</em>.</li>
-        <li>Open the app and enter your server address, username and password.</li>
+        <li><strong>Mac, Windows, Linux:</strong> download Cloudy from the <a href="https://github.com/Fahed-Alhammadi/cloudy/releases?q=desktop-v&amp;expanded=true">releases page</a>: the
+          <code>.dmg</code> (Apple silicon <code>arm64</code> or Intel <code>x64</code>) or <code>.pkg</code> for a Mac, the
+          <code>.exe</code> for Windows, the <code>.AppImage</code> or <code>.deb</code> for Linux. It appears in the menu bar or
+          system tray.</li>
+        <li>Open the app and enter your server address, username and password. On the desktop, then choose the folder to sync.</li>
         <li>Optional on Android: turn on photo backup and choose folders to keep offline.</li>
       </ul>
     </section>

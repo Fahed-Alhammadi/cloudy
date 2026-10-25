@@ -66,26 +66,9 @@ npm run dist:mac | dist:win | dist:linux    # packages in dist/ (unsigned locall
 
 New texts: wrap them in `t('…')` and add them to all four `i18n/*.json` files (`python3 tests/i18n_check.py`).
 
-## Release
+## Updates
 
-`scripts/version.py bump desktop X.Y.Z`, then commit and push to main. `.github/workflows/desktop.yml` runs the
-tests, builds the packages listed below, notarizes, and publishes the GitHub release `desktop-vX.Y.Z`, with all
-packages and the `latest*.yml` files attached in one step.
-
-| Platform | Packages |
-|---|---|
-| macOS | `.dmg` + `.zip` (arm64, x64) and a universal `.pkg`, all signed with Developer ID and notarized |
-| Windows | NSIS `.exe` (x64) |
-| Linux | AppImage + `.deb` (x64, arm64) |
-
-Installed apps find the release by its `desktop-v` tag, because this repository also has server, Android and iOS
-releases. They update themselves on macOS (from the `.zip`), on Windows, from an AppImage and from a `.deb`.
-
-The macOS secrets are listed at the top of the workflow:
-
-- `MACOS_CERTIFICATE_P12`
-- `MACOS_INSTALLER_CERTIFICATE_P12`
-- `MACOS_CERTIFICATE_PASSWORD`
-- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`
-
-Windows builds are unsigned, so SmartScreen shows "Unknown publisher" until a code-signing certificate is added.
+New versions are published as GitHub releases tagged `desktop-vX.Y.Z`, with all packages and the `latest*.yml`
+update files. The installed app looks for the newest `desktop-v` release, because this repository also has server,
+Android and iOS releases. It updates itself on macOS (from the `.zip`), on Windows, from an AppImage and from a
+`.deb`. The macOS packages are signed with a Developer ID and notarized; the Windows installer is not signed yet.

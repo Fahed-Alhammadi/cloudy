@@ -4,56 +4,52 @@
 
 <h1 align="center">Cloudy</h1>
 
-Your own cloud for files, sharing, calendars and contacts. You run it yourself: **one container** (server and
-database inside), a browser app, native Android and iPhone apps, and a desktop sync app for macOS, Windows and Linux.
-
-## Screenshots
-
 <p align="center">
-  <img src="docs/screenshots/files.png" alt="Files" width="200">
-  <img src="docs/screenshots/sharing.png" alt="Sharing" width="200">
-  <img src="docs/screenshots/preview.png" alt="Text editor" width="200">
-  <br>
-  <img src="docs/screenshots/photos.png" alt="Photo backup" width="200">
-  <img src="docs/screenshots/calendar.png" alt="Calendar" width="200">
-  <img src="docs/screenshots/contacts.png" alt="Contacts" width="200">
+  Your own cloud for files, sharing, calendars and contacts, on a server you run yourself.<br>
+  <a href="https://fahed-alhammadi.github.io/cloudy/"><b>Website, screenshots and downloads</b></a>
 </p>
+
+Cloudy is **one container** (server and database inside) plus apps for every device. The server is free and open
+source, and the apps talk only to your server: no ads, no analytics, no tracking.
+
+## Apps
+
+| App | Get it | What it does |
+|---|---|---|
+| **Web** | built into the server | Files, sharing, calendar, contacts, administration |
+| **Android** | [Google Play](https://play.google.com/store/apps/details?id=io.cloudy.app) | Files, offline files, photo backup, document scanner, calendar, contacts |
+| **iPhone** | [TestFlight beta](https://testflight.apple.com/join/X1M6sYZm) (App Store soon) | Files with Quick Look, document scanner, sharing, calendar, contacts, Face ID lock |
+| **macOS, Windows, Linux** | [GitHub releases](https://github.com/Fahed-Alhammadi/cloudy/releases) (`desktop-v…`) | Keeps a folder on your computer in sync with your files, like Dropbox |
+| **Other apps** | WebDAV, CalDAV, CardDAV | Finder, Windows Explorer, rclone, Thunderbird, DAVx⁵, Apple Calendar/Contacts |
+
+Desktop downloads: `.dmg` (macOS, Apple silicon or Intel) or `.pkg` (all Macs), `.exe` (Windows), `.AppImage` or
+`.deb` (Linux). The Mac app is signed and notarized by Apple. The Windows installer isn't signed yet, so Windows may
+show "Unknown publisher" the first time. The desktop app updates itself.
+
+More about each app: [Android](android/README.md) · [iPhone](ios/README.md) · [Desktop](desktop/README.md).
 
 ## Features
 
 - **Files:** drag-and-drop upload (whole folders too), resumable uploads, previews for images, video, audio and
   PDF, a text editor, versions, trash, favorites, recent files, search, and download a folder as ZIP.
-- **Sharing:**
-  - with users or groups, read-only or editable;
-  - public links with a password, an expiry date, and optional upload into the shared folder.
-- **Calendar and contacts:** web apps, plus CalDAV/CardDAV sync with Thunderbird, DAVx⁵, Apple
-  Calendar/Contacts and others.
-- **WebDAV:** mount your files in Finder, Windows Explorer, rclone or Cyberduck.
-- **Android app:**
-  - browse files, preview them, share links, or send a file straight to WhatsApp, Telegram, email and other apps;
-  - keep files available offline;
-  - back up photos automatically;
-  - calendar and contacts;
-  - edit text files;
-  - installed and updated through Google Play.
-- **iPhone app** (SwiftUI, iOS 17+, App Store): files with Quick Look previews, uploads from Photos and Files,
-  document scanner, sharing, calendar, contacts, text editing, Face ID app lock. See [ios/README.md](ios/README.md).
-- **Desktop sync app** (macOS, Windows, Linux): keeps a folder on your computer in two-way sync with your Cloudy
-  files, like Dropbox or the Nextcloud client: pick which folders to sync, changes go up and down within seconds,
-  renames and moves aren't re-transferred, edits in two places keep both copies, deletions go to the trash. Sits in
-  the menu bar / system tray and updates itself from GitHub releases. Download it from the
-  [releases](https://github.com/Fahed-Alhammadi/cloudy/releases) (`desktop-v…`). See [desktop/README.md](desktop/README.md).
-- **Live updates:** file lists in the browser and the phone apps update by themselves when files change
-  anywhere (another device, a share, WebDAV), like Google Drive.
+- **Sharing:** with users or groups, read-only or editable; public links with a password, an expiry date, and
+  optional upload into the shared folder.
+- **Desktop sync:** pick which folders to sync; changes go up and down within seconds; renames and moves aren't
+  transferred again; edits in two places keep both copies; deletions go to the trash. It runs in the menu bar or
+  system tray.
+- **Phone apps:** browse, preview and share files, send them to other apps, scan documents to PDF, calendar and
+  contacts, text editing, app lock. On Android you also get offline files and automatic photo backup.
+- **Live updates:** file lists in the browser, the phone apps and the desktop app update by themselves when files
+  change anywhere (another device, a share, WebDAV).
 - **Office documents:** Word, Excel, PowerPoint and OpenDocument files can be viewed (read-only) in the browser
-  and the Android app; the built-in LibreOffice turns them into PDF — inside the same container.
-- **Security:** passkey sign-in (fingerprint, face, screen lock or security key), two-factor authentication
-  (authenticator-app codes + recovery codes) for every user, app passwords per device, brute-force protection.
-- **Contacts import/export:** bring contacts in from a `.vcf` (phone Contacts app, Google, Outlook, iCloud; vCard
-  2.1–4.0) or a `.csv` (Google, Outlook) in the browser or the Android app — duplicates are skipped — and export an
-  address book as one `.vcf`.
+  and the apps. The built-in LibreOffice turns them into PDF, inside the same container.
+- **Calendar and contacts:** web apps plus CalDAV/CardDAV sync. Import contacts from `.vcf` (vCard 2.1–4.0) or
+  `.csv` (Google, Outlook), skipping duplicates, and export an address book as one `.vcf`.
+- **Security:** passkey sign-in, two-factor authentication (authenticator-app codes + recovery codes), an app
+  password per device that you can revoke, and brute-force protection.
 - **Email:** password reset by email, share notifications and security notices through your SMTP server.
 - **Administration:** users, groups, quotas, app passwords, 2FA and passkey reset, and email (SMTP) settings.
+- **Languages:** English, العربية, Deutsch, Français, Español on the web, the apps and in emails.
 
 ## Install
 
@@ -175,39 +171,9 @@ docker compose pull && docker compose up -d
 
 The database schema migrates itself at startup. Your data stays in the volumes.
 
-**Desktop app.** It checks GitHub once a day for a newer `desktop-v…` release, downloads it in the background and
-installs it when you restart or quit (Settings → Check for updates checks right away).
-
-## Releases (maintainers)
-
-The server, the Android app, the iPhone app and the desktop app are released **independently**. Each has its own version, its own
-GitHub Actions workflow and its own tag:
-
-| Product | Folder | Version lives in | Published to | Tag |
-|---|---|---|---|---|
-| Server | `server/` | `server/package.json` | `ghcr.io/fahed-alhammadi/cloudy:X.Y.Z` + `:latest` | `server-vX.Y.Z` |
-| Android | `android/` | `versionName`/`versionCode` in `android/app/build.gradle.kts` | Google Play (closed testing) | `android-vX.Y.Z` |
-| iPhone | `ios/` | `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` in `ios/project.yml` | App Store Connect (TestFlight) | `ios-vX.Y.Z` |
-| Desktop | `desktop/` | `desktop/package.json` | GitHub release: macOS .dmg/.pkg (signed + notarized), Windows .exe, Linux AppImage/.deb | `desktop-vX.Y.Z` |
-
-Each workflow runs only when its folder changes: every push and pull request is tested and built. Nothing is
-published until you **bump the version**:
-
-```sh
-git fetch --tags && scripts/version.py status       # current versions, and which are released
-scripts/version.py bump server 1.10.1                # or: android 1.11.0 / ios 1.0.1 / desktop 1.0.1
-git commit -am "server 1.10.1: …" && git push        # the Server workflow tests, publishes and tags server-v1.10.1
-```
-
-For the apps, update the **"What's new"** text in the same commit: `android/whatsnew/whatsnew-en-US` (Google Play,
-max 500 characters) and `ios/whatsnew/en-US.txt` (TestFlight "What to Test", and the App Store "What's New" from the
-second App Store version on). The workflows send them with the upload.
-
-A server-only fix therefore never touches the apps, and an app update never rebuilds the image. The store
-uploads stop at Play closed testing and TestFlight: promoting to production in Play Console and submitting for App
-Review stay manual. Required secrets are listed at the top of `.github/workflows/android.yml`, `ios.yml` and `desktop.yml`; without
-them those workflows build but don't publish or tag. Details: [android/README.md](android/README.md),
-[ios/README.md](ios/README.md).
+**Apps.** Android and iPhone update through Google Play and the App Store (TestFlight for the beta). The desktop app
+checks GitHub once a day for a new version, downloads it in the background and installs it when you restart or quit
+(*Settings → Check for updates* checks right away).
 
 ## Two-factor authentication
 
@@ -216,7 +182,7 @@ Each user can turn it on under *Settings → Two-factor authentication*:
 2. Confirm with a code.
 3. Save the 10 recovery codes shown.
 
-From then on, the web app and the Android app ask for a code after the password. A recovery code can be used
+From then on, the web app and the apps ask for a code after the password. A recovery code can be used
 once instead, if the phone is lost.
 
 With 2FA on, WebDAV, CalDAV and CardDAV apps must sign in with an **app password**, because those protocols
@@ -225,11 +191,11 @@ can't ask for a code. An administrator can reset 2FA for a user under *Administr
 ## Office documents
 
 Opening a `.docx`, `.xlsx`, `.pptx`, `.odt`, `.ods`, `.odp`, `.rtf` (or older `.doc`/`.xls`/`.ppt`) file shows a
-read-only preview in the browser and in the Android app. The built-in LibreOffice converts the document to PDF the
+read-only preview in the browser and in the apps. The built-in LibreOffice converts the document to PDF the
 first time it's opened (usually a second or two) and keeps the result until the file changes. To change a
 document, download it and upload the new version — Cloudy keeps the old one under *Versions*.
 
-Text files (`.txt`, `.md`, `.csv`, …) can be edited directly in the browser and the Android app.
+Text files (`.txt`, `.md`, `.csv`, …) can be edited directly in the browser and the phone apps.
 
 ## Email
 
@@ -252,7 +218,7 @@ username, password or two-factor code is needed: the passkey itself requires the
 
 - Passkeys need HTTPS (or `http://localhost`) and only work on the address they were created on. If your
   proxy doesn't forward the original `Host`, set `PUBLIC_URL` (e.g. `https://cloud.example.com`).
-- The password still works, and the Android app and DAV clients keep using passwords / app passwords.
+- The password still works, and the apps and DAV clients keep using passwords / app passwords.
 - An administrator can remove all of a user's passkeys under *Administration → Edit user*.
 
 ## Connecting other apps
@@ -289,6 +255,7 @@ Set these in `docker-compose.yml` (the value after `:-`) or in a `.env` file nex
 | End-to-end tests (stack running) | `python3 tests/e2e.py http://localhost:8080 admin '<admin password>'` |
 | Android debug build | `cd android && ./gradlew assembleDebug` (JDK 17+, Android SDK 36) |
 | iOS simulator build | `ios/build.sh` (Xcode 16+, `brew install xcodegen`) |
+| Desktop app | `cd desktop && npm install && npm start` (tests and packages: [desktop/README.md](desktop/README.md)) |
 | Translations complete | `python3 tests/i18n_check.py` |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how Cloudy works inside.
@@ -301,10 +268,10 @@ android/             native Android app (Kotlin, Jetpack Compose) → Google Pla
 ios/                 native iPhone app (Swift, SwiftUI) → App Store                      tag ios-vX.Y.Z
 desktop/             desktop sync app (Electron, TypeScript) → GitHub releases           tag desktop-vX.Y.Z
 deploy/              docker-compose.yml that builds the image from source
-docs/                website, privacy policy, architecture notes
+docs/                website (screenshots), privacy policy, architecture notes
 tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests, translation check
-scripts/             version.py (versions of all four), github-release.sh (tag + release notes)
-.github/workflows/   server.yml, android.yml, ios.yml, desktop.yml (each: test → publish on version bump), translations.yml
+scripts/             versions and release helpers
+.github/workflows/   one workflow per product (test, build, publish), translations.yml
 ```
 
 ## License
