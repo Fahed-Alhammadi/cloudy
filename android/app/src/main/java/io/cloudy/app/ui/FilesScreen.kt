@@ -121,6 +121,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 
 /** Upload progress shown above the file list. */
 class UploadState {
@@ -175,7 +183,7 @@ suspend fun uploadUris(context: Context, parentId: Long, uris: List<Uri>, state:
 }
 
 /** The file on the device for handing to another app: the offline copy, or a download into the cache. */
-private suspend fun localCopy(context: Context, node: FileNode): Uri {
+internal suspend fun localCopy(context: Context, node: FileNode): Uri {
     val offline = withContext(Dispatchers.IO) { Services.offline.localFile(node) }
     val file = offline ?: File(context.cacheDir, "open/${node.id}-${node.etag}/${node.name}").also {
         if (!withContext(Dispatchers.IO) { it.exists() }) {
@@ -226,6 +234,7 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
     var newFolder by remember { mutableStateOf(false) }
     var newTextFile by remember { mutableStateOf(false) }
     var scanned by remember { mutableStateOf<Uri?>(null) } // a scanned PDF waiting for its name
+    var selecting by remember { mutableStateOf(false) }
     val viewPrefs = remember { ViewPrefs(context) }
     var grid by remember { mutableStateOf(viewPrefs.grid) }
     var sort by remember { mutableStateOf(viewPrefs.sort) }
@@ -281,7 +290,7 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
             )
         },
         floatingActionButton = {
-            if (canEdit) Box {
+            if (canEdit && !selecting) Box {
                 FloatingActionButton(onClick = { menuOpen = true }, modifier = Modifier.sideInsets()) { Icon(Icons.Filled.Add, stringResource(R.string.add)) }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
                     DropdownMenuItem({ Text(stringResource(R.string.upload_media)) }, leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) }, onClick = {
@@ -333,7 +342,8 @@ fun FolderScreen(nav: NavController, folderId: Long, sharedUris: MutableState<Li
                     error != null && l == null -> EmptyState(Icons.Outlined.CloudOff, error!!)
                     l == null -> Loading()
                     l.children.isNullOrEmpty() -> EmptyState(Icons.Outlined.FolderOpen, stringResource(if (canEdit) R.string.empty_folder_tap else R.string.empty_folder))
-                    else -> NodeList(sortNodes(l.children!!, sort), nav, canModify = { canEdit }, reload = reload, scope = scope, grid = grid)
+                    else -> NodeList(sortNodes(l.children!!, sort), nav, canModify = { canEdit }, reload = reload, scope = scope, grid = grid,
+                        onSelecting = { selecting = it })
                 }
             }
         }
@@ -370,6 +380,12 @@ fun openNode(nav: NavController, node: FileNode) {
     }
 }
 
+/**
+ * Files as a list or grid. Tap opens; long-press (or ⋮) shows the actions, whose first entry "Select" starts
+ * multi-select: then taps tick files and the bar at the bottom acts on all of them. [onSelecting] lets the screen
+ * hide its + button meanwhile.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NodeList(
     items: List<FileNode>,
@@ -379,36 +395,90 @@ fun NodeList(
     scope: CoroutineScope,
     subtitle: (FileNode) -> String? = { null },
     grid: Boolean = false,
+    onSelecting: (Boolean) -> Unit = {},
 ) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
     var sheetFor by remember { mutableStateOf<FileNode?>(null) }
-    if (grid) NodeGrid(items, onOpen = { openNode(nav, it) }, onActions = { sheetFor = it })
-    else LazyColumn(Modifier.fillMaxSize()) {
-        items(items, key = { it.id }) { node ->
-            ListItem(
-                modifier = Modifier.clickable { openNode(nav, node) },
-                leadingContent = { FileIcon(node) },
-                headlineContent = { Text(node.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                supportingContent = {
-                    Text(subtitle(node) ?: listOfNotNull(if (node.isDir) null else formatSize(node.size), formatDate(node.mtime).ifEmpty { null }).joinToString(" · "),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                trailingContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (node.favorite) Icon(Icons.Filled.Star, null, tint = androidx.compose.ui.graphics.Color(0xFFE5A50A), modifier = Modifier.size(16.dp))
-                        if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, stringResource(R.string.available_offline), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                        if (node.shared) Icon(Icons.Outlined.Share, stringResource(R.string.shared), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
-                        IconButton(onClick = { sheetFor = node }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.actions_for, node.name)) }
-                    }
-                },
-            )
+    // Selected ids survive rotation; files that disappear (deleted on another device) drop out by themselves.
+    var selectedIds by rememberSaveable { mutableStateOf(listOf<Long>()) }
+    val selected = remember(selectedIds, items) { items.filter { it.id in selectedIds } }
+    val selecting = selected.isNotEmpty()
+    var bulk by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(selecting) { onSelecting(selecting) }
+    BackHandler(selecting) { selectedIds = emptyList() }
+
+    fun toggle(n: FileNode) { selectedIds = if (n.id in selectedIds) selectedIds - n.id else selectedIds + n.id }
+    fun longPress(n: FileNode) {
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (selecting) toggle(n) else sheetFor = n
+    }
+    val open: (FileNode) -> Unit = { if (selecting) toggle(it) else openNode(nav, it) }
+    /** Runs [action] on each node, then clears the selection and reloads; failures are counted, not fatal. */
+    fun bulkAct(nodes: List<FileNode>, action: suspend (FileNode) -> Unit) {
+        selectedIds = emptyList()
+        scope.launch {
+            val failed = nodes.count { n -> runCatching { action(n) }.isFailure }
+            if (failed > 0) toast(context, context.getString(R.string.n_failed, failed))
+            reload()
         }
     }
-    sheetFor?.let { node -> NodeActions(node, nav, canModify(node), reload, scope) { sheetFor = null } }
+    val modifiable = selected.filter(canModify)
+
+    Box(Modifier.fillMaxSize()) {
+        if (grid) NodeGrid(items, onOpen = open, onActions = { longPress(it) }, selected = if (selecting) selectedIds.toSet() else null)
+        else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = if (selecting) 80.dp else 0.dp)) {
+            items(items, key = { it.id }) { node ->
+                val isSelected = node.id in selectedIds
+                ListItem(
+                    modifier = Modifier.combinedClickable(onClick = { open(node) }, onLongClick = { longPress(node) }),
+                    colors = if (isSelected) ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else ListItemDefaults.colors(),
+                    leadingContent = { if (selecting) Checkbox(isSelected, onCheckedChange = { toggle(node) }) else FileIcon(node) },
+                    headlineContent = { Text(node.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    supportingContent = {
+                        Text(subtitle(node) ?: listOfNotNull(if (node.isDir) null else formatSize(node.size), formatDate(node.mtime).ifEmpty { null }).joinToString(" · "),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (node.favorite) Icon(Icons.Filled.Star, null, tint = androidx.compose.ui.graphics.Color(0xFFE5A50A), modifier = Modifier.size(16.dp))
+                            if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, stringResource(R.string.available_offline), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            if (node.shared) Icon(Icons.Outlined.Share, stringResource(R.string.shared), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(16.dp))
+                            if (!selecting) IconButton(onClick = { sheetFor = node }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.actions_for, node.name)) }
+                        }
+                    },
+                )
+            }
+        }
+        if (selecting) SelectionBar(
+            count = selected.size,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            onClose = { selectedIds = emptyList() },
+            onSelectAll = { selectedIds = items.map { it.id } },
+            onSend = {
+                val files = selected.filter { !it.isDir }
+                if (files.isEmpty()) toast(context, context.getString(R.string.send_files_only))
+                else scope.launch { runCatching { sendManyToApp(context, files) }.onFailure { toast(context, it.message ?: context.getString(R.string.failed)) } }
+            },
+            onFavorite = { bulkAct(selected.filter { !it.favorite }) { Services.api.setFavorite(it.id, true) } },
+            onMove = if (modifiable.isEmpty()) null else ({ bulk = "move" }),
+            onDelete = if (modifiable.isEmpty()) null else ({ bulk = "delete" }),
+        )
+    }
+    sheetFor?.let { node -> NodeActions(node, nav, canModify(node), reload, scope, onSelect = { selectedIds = listOf(node.id) }) { sheetFor = null } }
+    when (bulk) {
+        "delete" -> ConfirmDialog(stringResource(R.string.delete), stringResource(R.string.delete_n_confirm, modifiable.size), stringResource(R.string.delete),
+            onDismiss = { bulk = null }) { bulk = null; bulkAct(modifiable) { Services.api.delete(it.id) } }
+        "move" -> FolderPicker(stringResource(R.string.move_copy_n, modifiable.size), modifiable.map { it.id }.toSet(), onDismiss = { bulk = null }) { dest, copy ->
+            bulk = null
+            bulkAct(modifiable) { if (copy) Services.api.copy(it.id, dest) else Services.api.move(it.id, dest) }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: () -> Unit, scope: CoroutineScope, onClose: () -> Unit) {
+fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: () -> Unit, scope: CoroutineScope, onSelect: (() -> Unit)? = null, onClose: () -> Unit) {
     val context = LocalContext.current
     val me = Services.session.user.value
     val isOwner = node.owner == me?.id
@@ -446,6 +516,7 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
                 headlineContent = { Text(stringResource(label), color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface) },
             )
         val failed = stringResource(R.string.failed)
+        onSelect?.let { select -> Item(R.string.select, Icons.Outlined.CheckCircle) { onClose(); select() } }
         if (!node.isDir) Item(R.string.send_to, Icons.AutoMirrored.Outlined.Send) { onClose(); scope.launch { runCatching { sendToApp(context, node) }.onFailure { toast(context, it.message ?: failed) } } }
         if (!node.isDir) Item(R.string.open_with, Icons.AutoMirrored.Outlined.OpenInNew) { onClose(); scope.launch { runCatching { openExternally(context, node) }.onFailure { toast(context, it.message ?: failed) } } }
         Item(if (node.isDir) R.string.save_as_zip else R.string.save_to_device, Icons.Outlined.Download) { onClose(); saveAs.launch(node.name + if (node.isDir) ".zip" else "") }
@@ -473,7 +544,7 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
     when (dialog) {
         "rename" -> TextPrompt(stringResource(R.string.rename), node.name, confirm = stringResource(R.string.rename), onDismiss = onClose) { name -> act { Services.api.rename(node.id, name) } }
         "delete" -> ConfirmDialog(stringResource(R.string.delete), stringResource(R.string.delete_confirm, node.name), stringResource(R.string.delete), onClose) { act { Services.api.delete(node.id) } }
-        "move" -> FolderPicker(node, onDismiss = onClose) { dest, copy -> act { if (copy) Services.api.copy(node.id, dest) else Services.api.move(node.id, dest) } }
+        "move" -> FolderPicker(stringResource(R.string.move_copy_title, node.name), setOf(node.id), onDismiss = onClose) { dest, copy -> act { if (copy) Services.api.copy(node.id, dest) else Services.api.move(node.id, dest) } }
         "link" -> LinkDialog(node, onClose)
         "people" -> PeopleDialog(node, onClose)
         "shares" -> SharesDialog(node) { act {} }
@@ -481,14 +552,14 @@ fun NodeActions(node: FileNode, nav: NavController, canModify: Boolean, reload: 
 }
 
 @Composable
-fun FolderPicker(node: FileNode, onDismiss: () -> Unit, onPick: (Long, Boolean) -> Unit) {
+fun FolderPicker(title: String, exclude: Set<Long>, onDismiss: () -> Unit, onPick: (Long, Boolean) -> Unit) {
     val rootId = Services.session.user.value?.rootId ?: return
     var current by remember { mutableStateOf(rootId) }
     var listing by remember { mutableStateOf<NodeListing?>(null) }
     LaunchedEffect(current) { listing = runCatching { Services.api.node(current) }.getOrNull() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.move_copy_title, node.name), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
                 val files = stringResource(R.string.tab_files)
@@ -497,7 +568,7 @@ fun FolderPicker(node: FileNode, onDismiss: () -> Unit, onPick: (Long, Boolean) 
                     listing?.node?.parentId?.let { parent ->
                         item { ListItem(modifier = Modifier.clickable { current = parent }, headlineContent = { Text("..") }, leadingContent = { Icon(Icons.Outlined.Folder, null) }) }
                     }
-                    items(listing?.children.orEmpty().filter { it.isDir && it.id != node.id }, key = { it.id }) { d ->
+                    items(listing?.children.orEmpty().filter { it.isDir && it.id !in exclude }, key = { it.id }) { d ->
                         ListItem(modifier = Modifier.clickable { current = d.id }, headlineContent = { Text(d.name) }, leadingContent = { FileIcon(d, Modifier.size(24.dp)) })
                     }
                 }

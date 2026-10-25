@@ -61,6 +61,7 @@ final class Session {
         defaults.removeObject(forKey: "user")
         user = nil
         FileCache.clear()
+        Task { await Thumbnails.shared.clear() }
     }
 }
 

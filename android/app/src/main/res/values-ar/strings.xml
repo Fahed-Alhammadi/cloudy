@@ -245,4 +245,13 @@
     <string name="how_to_fix">طريقة الإصلاح: %1$s</string>
     <string name="copied_name">تم نسخ %1$s</string>
     <string name="copy_name">نسخ %1$s</string>
+    <!-- Multi-select -->
+    <string name="select">تحديد</string>
+    <string name="n_selected">تم تحديد %1$d</string>
+    <string name="select_all">تحديد الكل</string>
+    <string name="send_n">إرسال %1$d ملفات</string>
+    <string name="delete_n_confirm">نقل %1$d عناصر إلى سلة المهملات؟</string>
+    <string name="move_copy_n">نقل أو نسخ %1$d عناصر</string>
+    <string name="send_files_only">لا يمكن إرسال المجلدات. حدّد ملفات.</string>
+    <string name="n_failed">فشل %1$d</string>
 </resources>

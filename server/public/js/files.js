@@ -29,18 +29,43 @@ export function userUploadTarget(parentId) {
  */
 function fileTable(opts) {
   const selected = new Set();
+  const rows = new Map(); // id → { tr, box }
   const bar = h('div', { class: 'selection-bar', hidden: true });
   const tbody = h('tbody');
   const allBox = h('input', { type: 'checkbox', 'aria-label': t('Select all') });
+  let table;
+
+  // Multi-select, the same as in the apps: "Select" in a file's menu (long-press on touch screens), then clicking
+  // rows ticks them, and the bar acts on all of them.
+  const setSelected = (item, on) => {
+    on ? selected.add(item.id) : selected.delete(item.id);
+    const r = rows.get(item.id);
+    if (r) { r.box.checked = on; r.tr.classList.toggle('selected', on); }
+  };
+  const menuFor = (item) => [
+    { label: t('Select'), icon: 'check', onclick: () => { setSelected(item, true); updateBar(); } },
+    '-',
+    ...nodeActions(item, opts),
+  ];
 
   const updateBar = () => {
     bar.hidden = selected.size === 0;
+    table?.classList.toggle('selecting', selected.size > 0);
     allBox.checked = selected.size > 0 && selected.size === opts.items.length;
+    const chosen = opts.items.filter((i) => selected.has(i.id));
     bar.replaceChildren(
+      h('button', { class: 'icon-btn', 'aria-label': t('Clear selection'), title: t('Clear selection'), onclick: () => {
+        for (const it of chosen) setSelected(it, false);
+        updateBar();
+      } }, icon('x')),
       h('span', {}, t('{n} selected', { n: selected.size })),
       h('button', { class: 'btn ghost', onclick: () => {
         for (const it of opts.items.filter((i) => selected.has(i.id))) triggerDownload(nodeUrl(it, false), it.name + (it.isDir ? '.zip' : ''));
       } }, icon('download'), t('Download')),
+      chosen.some((i) => !i.favorite) && h('button', { class: 'btn ghost', onclick: async () => {
+        for (const it of chosen.filter((i) => !i.favorite)) await post(`/api/nodes/${it.id}/favorite`).catch(showError);
+        opts.reload();
+      } }, icon('star'), t('Add to favorites')),
       opts.items.some((i) => selected.has(i.id) && opts.canModify(i)) && h('button', { class: 'btn ghost', onclick: () => moveCopy(opts.items.filter((i) => selected.has(i.id)), opts) }, icon('move'), t('Move or copy')),
       opts.items.some((i) => selected.has(i.id) && opts.canModify(i)) && h('button', { class: 'btn ghost danger', onclick: async () => {
         const list = opts.items.filter((i) => selected.has(i.id) && opts.canModify(i));
@@ -51,26 +76,63 @@ function fileTable(opts) {
     );
   };
   allBox.addEventListener('change', () => {
-    selected.clear();
-    if (allBox.checked) opts.items.forEach((i) => selected.add(i.id));
-    tbody.querySelectorAll('input[type=checkbox]').forEach((c) => (c.checked = allBox.checked));
+    for (const it of opts.items) setSelected(it, allBox.checked);
     updateBar();
   });
 
   for (const item of opts.items) {
     const box = h('input', { type: 'checkbox', 'aria-label': t('Select {name}', { name: item.name }), onclick: (e) => e.stopPropagation(), onchange: (e) => {
-      e.target.checked ? selected.add(item.id) : selected.delete(item.id);
+      setSelected(item, e.target.checked);
       updateBar();
     } });
     const more = h('button', { class: 'icon-btn', 'aria-label': t('Actions for {name}', { name: item.name }), onclick: (e) => {
       e.stopPropagation();
-      showMenu(e.currentTarget, nodeActions(item, opts));
+      showMenu(e.currentTarget, menuFor(item));
     } }, icon('more'));
+    // Long-press on touch screens opens the menu (iOS Safari has no contextmenu event; Android Chrome fires one
+    // too, so a press shows the menu only once). Some browsers send a click when the finger lifts: it is swallowed
+    // before the page's "click outside closes the menu" handler sees it.
+    let pressTimer = null;
+    let pressStart = null;
+    let pressMenuShown = false;
+    const pressMenu = (x, y) => {
+      if (pressMenuShown) return;
+      pressMenuShown = true;
+      navigator.vibrate?.(10);
+      showMenu({ x, y }, menuFor(item));
+    };
     const tr = h('tr', {
       class: 'file-row', tabindex: 0, draggable: opts.canModify(item) ? 'true' : null,
-      onclick: () => opts.onOpen(item),
+      onclick: () => {
+        if (selected.size > 0) { setSelected(item, !selected.has(item.id)); updateBar(); return; }
+        opts.onOpen(item);
+      },
       onkeydown: (e) => { if (e.key === 'Enter') opts.onOpen(item); },
-      oncontextmenu: (e) => { e.preventDefault(); showMenu({ x: e.clientX, y: e.clientY }, nodeActions(item, opts)); },
+      oncontextmenu: (e) => {
+        e.preventDefault();
+        clearTimeout(pressTimer);
+        if (pressStart) pressMenu(e.clientX, e.clientY);
+        else showMenu({ x: e.clientX, y: e.clientY }, menuFor(item));
+      },
+      onpointerdown: (e) => {
+        if (e.pointerType !== 'touch') return;
+        pressMenuShown = false;
+        pressStart = { x: e.clientX, y: e.clientY };
+        pressTimer = setTimeout(() => pressMenu(pressStart.x, pressStart.y), 500);
+      },
+      onpointermove: (e) => {
+        if (pressStart && Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > 10) { clearTimeout(pressTimer); pressStart = null; }
+      },
+      onpointerup: () => {
+        clearTimeout(pressTimer);
+        pressStart = null;
+        if (!pressMenuShown) return;
+        pressMenuShown = false;
+        const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+        window.addEventListener('click', swallow, { capture: true, once: true });
+        setTimeout(() => window.removeEventListener('click', swallow, true), 500);
+      },
+      onpointercancel: () => { clearTimeout(pressTimer); pressStart = null; },
     },
       h('td', { class: 'col-check' }, box),
       h('td', { class: 'col-name' },
@@ -109,9 +171,10 @@ function fileTable(opts) {
       });
     }
     tbody.append(tr);
+    rows.set(item.id, { tr, box });
   }
 
-  const table = h('table', { class: 'file-table' },
+  table = h('table', { class: 'file-table' },
     h('thead', {}, h('tr', {},
       h('th', { class: 'col-check' }, allBox),
       h('th', { class: 'col-name' }, t('Name')),

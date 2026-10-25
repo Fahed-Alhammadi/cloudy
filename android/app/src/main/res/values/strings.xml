@@ -247,4 +247,13 @@
     <string name="how_to_fix">How to fix: %1$s</string>
     <string name="copied_name">%1$s copied</string>
     <string name="copy_name">Copy %1$s</string>
+    <!-- Multi-select -->
+    <string name="select">Select</string>
+    <string name="n_selected">%1$d selected</string>
+    <string name="select_all">Select all</string>
+    <string name="send_n">Send %1$d files</string>
+    <string name="delete_n_confirm">Move %1$d items to the trash?</string>
+    <string name="move_copy_n">Move or copy %1$d items</string>
+    <string name="send_files_only">Folders can\'t be sent. Select files.</string>
+    <string name="n_failed">%1$d failed</string>
 </resources>

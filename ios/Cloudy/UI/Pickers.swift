@@ -40,7 +40,7 @@ struct PickedFile: Transferable {
 struct FolderPicker: View {
     let title: LocalizedStringKey
     let action: LocalizedStringKey
-    var excluding: Int64?
+    var excluding: Set<Int64> = []
     let onPick: (Int64) -> Void
 
     @Environment(Session.self) private var session
@@ -70,7 +70,7 @@ private struct PickerFolder: View {
     let id: Int64
     let name: String
     let action: LocalizedStringKey
-    let excluding: Int64?
+    let excluding: Set<Int64>
     let onPick: (Int64) -> Void
     @State private var folders: [FileNode]?
     @State private var error: String?
@@ -80,7 +80,7 @@ private struct PickerFolder: View {
             NavigationLink(value: Crumb(id: f.id, name: f.name)) {
                 Label(f.name, systemImage: "folder.fill")
             }
-            .disabled(f.id == excluding)
+            .disabled(excluding.contains(f.id))
         }
         .overlay {
             if let error { ErrorState(message: error) { Task { await load() } } }

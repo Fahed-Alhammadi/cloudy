@@ -19,7 +19,7 @@ struct FilesTab: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            FolderView(id: session.rootId, title: String(localized: "Files"), isRoot: true)
+            FolderView(id: session.rootId, title: String(localized: "Files"))
                 .id(session.rootId)
                 .withRoutes()
         }
@@ -53,19 +53,50 @@ extension View {
 
 enum SortOrder: String, CaseIterable { case name, date, size }
 
+/// Search filters, the same as Android's TypeFilter.
+enum TypeFilter: String, CaseIterable, Hashable {
+    case all, folders, images, videos, audio, documents
+
+    var label: LocalizedStringKey {
+        switch self {
+        case .all: "All"
+        case .folders: "Folders"
+        case .images: "Images"
+        case .videos: "Videos"
+        case .audio: "Audio"
+        case .documents: "Documents"
+        }
+    }
+
+    func matches(_ n: FileNode) -> Bool {
+        let mime = n.mime ?? ""
+        switch self {
+        case .all: return true
+        case .folders: return n.isDir
+        case .images: return mime.hasPrefix("image/")
+        case .videos: return mime.hasPrefix("video/")
+        case .audio: return mime.hasPrefix("audio/")
+        case .documents:
+            return !n.isDir && mime.range(of: "pdf|^text/|json|xml|msword|officedocument|opendocument|rtf|presentation|spreadsheet",
+                                          options: .regularExpression) != nil
+        }
+    }
+}
+
 struct FolderView: View {
     let id: Int64
     let title: String
-    var isRoot = false
 
     @Environment(Uploads.self) private var uploads
     @AppStorage("sort") private var sort = SortOrder.name
     @AppStorage("sortDescending") private var descending = false
+    @AppStorage("grid") private var grid = false
     @State private var listing: NodeListing?
     @State private var loadError: String?
     @State private var actions = FileActions()
     @State private var query = ""
     @State private var results: [FileNode]?
+    @State private var filter = TypeFilter.all
     @State private var newFolder = false
     @State private var newText = false
     @State private var newName = ""
@@ -78,49 +109,37 @@ struct FolderView: View {
     @State private var namingScan = false
 
     var body: some View {
-        List {
-            if isRoot && query.isEmpty {
-                Section {
-                    NavigationLink(value: Route.list(.favorites)) { Label("Favorites", systemImage: "star") }
-                    NavigationLink(value: Route.list(.recent)) { Label("Recent", systemImage: "clock") }
-                    NavigationLink(value: Route.list(.shared)) { Label("Shared with you", systemImage: "person.2") }
-                    NavigationLink(value: Route.links) { Label("Shared by you", systemImage: "link") }
-                    NavigationLink(value: Route.trash) { Label("Trash", systemImage: "trash") }
+        content
+            .overlay {
+                if let loadError, listing == nil {
+                    ErrorState(message: loadError) { Task { await load() } }
+                } else if listing == nil {
+                    ProgressView()
+                } else if results != nil && shown.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                } else if results == nil && shown.isEmpty && uploads.jobs(in: id).isEmpty {
+                    ContentUnavailableView("This folder is empty", systemImage: "folder",
+                                           description: Text("Tap + to upload files or create a folder."))
                 }
             }
-            let jobs = uploads.jobs(in: id)
-            if !jobs.isEmpty && query.isEmpty {
-                Section("Uploading") {
-                    ForEach(jobs) { job in UploadRow(job: job) }
-                }
+            // Round "+" at the bottom, like Android's floating button.
+            .overlay(alignment: .bottomTrailing) {
+                if canEdit && results == nil && !actions.selecting { addButton.padding(20) }
             }
-            Section {
-                ForEach(shown) { node in
-                    FileRow(node: node, actions: actions, subtitle: results != nil ? node.path : nil)
-                }
+            .navigationTitle(title)
+            .searchable(text: $query, prompt: Text("Search all files"))
+            .searchScopes($filter, activation: .onSearchPresentation) {
+                ForEach(TypeFilter.allCases, id: \.self) { Text($0.label).tag($0) }
             }
-        }
-        .overlay {
-            if let loadError, listing == nil {
-                ErrorState(message: loadError) { Task { await load() } }
-            } else if listing == nil {
-                ProgressView()
-            } else if let results, results.isEmpty {
-                ContentUnavailableView.search(text: query)
-            } else if results == nil && shown.isEmpty && uploads.jobs(in: id).isEmpty && !isRoot {
-                ContentUnavailableView("This folder is empty", systemImage: "folder")
+            .task(id: query) { await search() }
+            .refreshable { await load() }
+            .task { actions.changed = { Task { await load() } }; await load() }
+            .onLiveChange(folders: [id]) { Task { await load() } }
+            .toolbar {
+                if !actions.selecting { viewButtons }
             }
-        }
-        .navigationTitle(title)
-        .searchable(text: $query, prompt: Text("Search all files"))
-        .task(id: query) { await search() }
-        .refreshable { await load() }
-        .task { actions.changed = { Task { await load() } }; await load() }
-        .onLiveChange(folders: [id]) { Task { await load() } }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) { addMenu }
-            ToolbarItem(placement: .secondaryAction) { sortMenu }
-        }
+            .selectionMode(actions, items: shown, canModify: { _ in canEdit })
+
         .fileActions(actions)
         .textPrompt("New folder", isPresented: $newFolder, text: $newName, action: "Create") { name in
             actions.run { _ = try await API.shared.mkdir(id, name) }
@@ -164,8 +183,54 @@ struct FolderView: View {
 
     private var canEdit: Bool { listing?.canEdit ?? true }
 
+    /// Search results are always a list (with their folder path); the folder itself is a list or a grid.
+    @ViewBuilder
+    private var content: some View {
+        let jobs = query.isEmpty ? uploads.jobs(in: id) : []
+        if grid && results == nil {
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(jobs) { job in UploadRow(job: job) }
+                }
+                .padding(.horizontal)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 14)], spacing: 18) {
+                    ForEach(shown) { node in FileTile(node: node, actions: actions) }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 90) // room for the + button
+            }
+            .background(Color(.systemGroupedBackground))
+        } else {
+            List(selection: $actions.selection) {
+                if !jobs.isEmpty {
+                    Section("Uploading") {
+                        ForEach(jobs) { job in UploadRow(job: job) }
+                    }
+                }
+                Section {
+                    ForEach(shown) { node in
+                        FileRow(node: node, actions: actions, subtitle: results != nil ? node.path : nil)
+                    }
+                } footer: {
+                    Color.clear.frame(height: 60) // room for the + button
+                }
+            }
+            .environment(\.editMode, .constant(actions.selecting ? .active : .inactive))
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var viewButtons: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button { withAnimation { grid.toggle() } } label: {
+                grid ? Label("List view", systemImage: "list.bullet") : Label("Grid view", systemImage: "square.grid.2x2")
+            }
+            sortMenu
+        }
+    }
+
     private var shown: [FileNode] {
-        if let results { return results }
+        if let results { return results.filter(filter.matches) }
         let items = listing?.children ?? []
         return items.sorted { a, b in
             if a.isDir != b.isDir { return a.isDir }
@@ -179,7 +244,7 @@ struct FolderView: View {
         }
     }
 
-    private var addMenu: some View {
+    private var addButton: some View {
         Menu {
             Button { showPhotos = true } label: { Label("Upload photos or videos", systemImage: "photo.on.rectangle") }
             Button { importing = true } label: { Label("Upload files", systemImage: "doc.badge.plus") }
@@ -190,9 +255,14 @@ struct FolderView: View {
             Button { newName = ""; newFolder = true } label: { Label("New folder", systemImage: "folder.badge.plus") }
             Button { newName = ""; newText = true } label: { Label("New text file", systemImage: "doc.plaintext") }
         } label: {
-            Label("Add", systemImage: "plus")
+            Image(systemName: "plus")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 58, height: 58)
+                .background(Circle().fill(Color.accentColor))
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
         }
-        .disabled(!canEdit)
+        .accessibilityLabel(Text("Add"))
     }
 
     private var sortMenu: some View {
@@ -206,6 +276,7 @@ struct FolderView: View {
         } label: {
             Label("Sort", systemImage: "arrow.up.arrow.down")
         }
+        .menuActionDismissBehavior(.disabled)
     }
 
     private func load() async {

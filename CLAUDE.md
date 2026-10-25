@@ -50,7 +50,7 @@ LibreOffice for office previews, started by `server/docker/entrypoint.sh`), conf
   Browse.kt = grid/sort, search filters, ML Kit document scanner; Security.kt = lock screen, language dialog, Devices). Strings in `res/values*/strings.xml`. No flavors.
   `build-apk.sh` → `android/dist/` Play AAB + APK for adb testing. `android/README.md` — build/release notes.
 - `ios/` — SwiftUI app `io.cloudy.app` (iOS 17+, no deps), project from `project.yml` (XcodeGen; `.xcodeproj` git-ignored).
-  `Cloudy/Data/` (API = URLSession client incl. chunked upload + SSE, Session = Keychain token, Live, Uploads),
+  `Cloudy/Data/` (API = URLSession client incl. chunked upload + SSE, Session = Keychain token, Live, Uploads, Thumbnails = grid previews),
   `Cloudy/UI/` (FilesView, FileActions = menus/Quick Look/share sheet, ShareSheetView, ListsView = favorites/recent/shared/links/trash,
   TextFileView, Pickers = folder picker/photos/VisionKit scanner, CalendarView, ContactsView, MoreView), `Cloudy/Resources/`
   (`Localizable.xcstrings`, `InfoPlist.xcstrings`, `PrivacyInfo.xcprivacy`, assets). README has the App Store checklist.
@@ -121,19 +121,20 @@ iOS: Swift 5 mode, SwiftUI + Observation, Quick Look, PhotosUI, VisionKit, Local
 - iOS / App Store: keep `Data/Models.swift` in sync with the JSON API too. No sign-up, payments, tracking or analytics
   (privacy label "no data collected", `PrivacyInfo.xcprivacy`); ATS allows http only on local networks; permission texts only
   for features that use them; no mention of Android/Google Play in the iOS UI. Privacy policy covers both apps (section "iPhone app").
+- File menus/multi-select work the same on web, Android and iOS: long-press (touch) / right-click / ⋯ opens the file's
+  actions, whose first entry "Select" starts multi-select; then taps toggle files and a bar acts on all of them
+  (send/download, move or copy, favorite, delete; one API call per file). Keep the three in step when adding actions.
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
-- 2026-10-25: App Store screenshots (6.9", 6 framed shots with icon) + header/search creative assets (16:9, 21:9, 3:2) + 29 s app preview video in `ios/appstore/`; Debug-only
-  screenshot hooks (`CLOUDY_OPEN`, `CLOUDY_CONTACT`, `CLOUDY_TOUR` scripted walk-through). Signed upload of iOS 1.10.0 (1) to App Store Connect, tagged `ios-v1.10.0`.
-- 2026-10-25: Monorepo split: `app/` → `server/`, `mobile/android` → `android/`, `mobile/ios` → `ios/` (+ `android/README.md`,
-  outputs in each `dist/`). Own version + tag per product (`server-v`, `android-v`, `ios-v`), `scripts/version.py`, path-filtered
-  workflows `server.yml`/`android.yml`/`ios.yml`/`translations.yml` replace `ci.yml`/`release.yml`; release on version bump
-  pushed to main (iOS → TestFlight via App Store Connect API key, `ios/build.sh upload`).
-- 2026-10-24: iOS app 1.10.0 (build 1) in `ios/` for the App Store: files (Quick Look, uploads from Photos/Files,
-  scanner (VisionKit, named like Android: "Scan yyyy-MM-dd HH.mm"; real iPhone only), move/copy/rename/favorite/trash, links + people sharing, text editor), calendar, contacts (import/export), devices,
-  app lock, live updates, 5 languages incl. Arabic RTL. `i18n_check.py` checks the iOS catalogs; privacy policy
-  has an iPhone section.
+- 2026-10-25: Multi-select + long-press menus on web, Android (`Selection.kt`, list long-press → sheet) and iOS (List edit
+  mode / grid check circles); web long-press on touch, checkboxes on phones while selecting. Tested in simulator, emulator, Chrome.
+- 2026-10-25: iOS Files tab like Android: only files (shortcuts moved to More), ⋯ per row, list/grid + `Thumbnails`, round +,
+  search type filters. App Store assets in `ios/appstore/` (screenshots, banners, preview video; Debug-only `CLOUDY_*` hooks).
+- 2026-10-25: Monorepo split (`server/`, `android/`, `ios/`), own version + tag per product (`scripts/version.py`), path-filtered
+  workflows publish on version bump (GHCR / Play closed testing / TestFlight via App Store Connect API key).
+- 2026-10-24: iOS app 1.10.0 in `ios/`: files (Quick Look, uploads, VisionKit scanner, sharing, text editor), calendar,
+  contacts, devices, app lock, live updates, 5 languages; privacy policy has an iPhone section.
 - 2026-10-23: 1.10.0 (code 15) — Multi-language: English, Arabic (RTL), German, French, Spanish on web, Android and emails;
   account language (`users.language`, `PATCH /api/me {language}`) picked in Settings → Profile / More → Language (Android 13+
   per-app language). Android (OpenCloud-inspired): document scanner → PDF, grid view + sort, search type filters, link expiry +

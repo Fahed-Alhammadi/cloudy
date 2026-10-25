@@ -8,9 +8,10 @@ struct NodeListView: View {
     @State private var actions = FileActions()
 
     var body: some View {
-        List(nodes ?? []) { node in
+        List(nodes ?? [], selection: $actions.selection) { node in
             FileRow(node: node, actions: actions, subtitle: subtitle(node))
         }
+        .environment(\.editMode, .constant(actions.selecting ? .active : .inactive))
         .overlay {
             if let loadError, nodes == nil { ErrorState(message: loadError) { Task { await load() } } }
             else if nodes == nil { ProgressView() }
@@ -21,6 +22,7 @@ struct NodeListView: View {
         .task { actions.changed = { Task { await load() } }; await load() }
         .onLiveChange(shares: kind == .shared, any: kind != .shared) { Task { await load() } }
         .fileActions(actions)
+        .selectionMode(actions, items: nodes ?? [], canModify: { $0.owner == Session.shared.user?.id })
     }
 
     private var title: LocalizedStringKey {

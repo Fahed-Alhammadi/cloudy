@@ -28,6 +28,14 @@ struct MoreView: View {
                         StorageRow(user: user)
                     }
                 }
+                // Same entries and order as Android's More screen; the Files tab only shows the folders.
+                Section {
+                    NavigationLink(value: Route.list(.recent)) { Label("Recent", systemImage: "clock") }
+                    NavigationLink(value: Route.list(.favorites)) { Label("Favorites", systemImage: "star") }
+                    NavigationLink(value: Route.list(.shared)) { Label("Shared with you", systemImage: "person.2") }
+                    NavigationLink(value: Route.links) { Label("Shared by you", systemImage: "link") }
+                    NavigationLink(value: Route.trash) { Label("Trash", systemImage: "trash") }
+                }
                 Section {
                     NavigationLink { DevicesView() } label: { Label("Devices", systemImage: "iphone") }
                     if canUseAppLock {
@@ -58,6 +66,7 @@ struct MoreView: View {
                 }
             }
             .navigationTitle("More")
+            .withRoutes()
             .refreshable { await session.refresh() }
             .confirmationDialog("Sign out of Cloudy?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { session.signOut() }

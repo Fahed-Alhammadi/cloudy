@@ -245,4 +245,13 @@
     <string name="how_to_fix">Comment corriger : %1$s</string>
     <string name="copied_name">%1$s copié</string>
     <string name="copy_name">Copier %1$s</string>
+    <!-- Multi-select -->
+    <string name="select">Sélectionner</string>
+    <string name="n_selected">%1$d sélectionné(s)</string>
+    <string name="select_all">Tout sélectionner</string>
+    <string name="send_n">Envoyer %1$d fichiers</string>
+    <string name="delete_n_confirm">Mettre %1$d éléments à la corbeille ?</string>
+    <string name="move_copy_n">Déplacer ou copier %1$d éléments</string>
+    <string name="send_files_only">Les dossiers ne peuvent pas être envoyés. Sélectionnez des fichiers.</string>
+    <string name="n_failed">%1$d en échec</string>
 </resources>

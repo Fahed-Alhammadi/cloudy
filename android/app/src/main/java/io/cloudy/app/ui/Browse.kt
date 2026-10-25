@@ -62,6 +62,8 @@ import io.cloudy.app.R
 import io.cloudy.app.Services
 import io.cloudy.app.data.FileNode
 import java.text.Collator
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.Circle
 
 // ---------------------------------------------------------------- list / grid and sort order
 
@@ -107,14 +109,18 @@ fun ViewActions(grid: Boolean, sort: String, onGrid: (Boolean) -> Unit, onSort: 
     }
 }
 
-/** Tiles with image thumbnails; tap opens, long-press or ⋮ shows the actions. */
+/** Tiles with image thumbnails; tap opens, long-press or ⋮ shows the actions. [selected] non-null = selection mode. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NodeGrid(items: List<FileNode>, onOpen: (FileNode) -> Unit, onActions: (FileNode) -> Unit) {
-    LazyVerticalGrid(GridCells.Adaptive(112.dp), Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+fun NodeGrid(items: List<FileNode>, onOpen: (FileNode) -> Unit, onActions: (FileNode) -> Unit, selected: Set<Long>? = null) {
+    LazyVerticalGrid(GridCells.Adaptive(112.dp), Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = if (selected != null) 88.dp else 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(items, key = { it.id }) { node ->
-            Column(Modifier.clip(RoundedCornerShape(10.dp)).combinedClickable(onClick = { onOpen(node) }, onLongClick = { onActions(node) }).padding(4.dp)) {
+            val isSelected = selected?.contains(node.id) == true
+            Column(Modifier.clip(RoundedCornerShape(10.dp))
+                .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+                .combinedClickable(onClick = { onOpen(node) }, onLongClick = { onActions(node) }).padding(4.dp)) {
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainer),
                     contentAlignment = Alignment.Center) {
                     // Thumbnails for images (Coil downsamples and caches); other types show their icon.
@@ -126,7 +132,11 @@ fun NodeGrid(items: List<FileNode>, onOpen: (FileNode) -> Unit, onActions: (File
                         if (node.favorite) Icon(Icons.Filled.Star, null, tint = androidx.compose.ui.graphics.Color(0xFFE5A50A), modifier = Modifier.size(16.dp))
                         if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, stringResource(R.string.available_offline), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = { onActions(node) }, Modifier.align(Alignment.TopEnd).size(32.dp)) {
+                    if (selected != null) Icon(
+                        if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(22.dp),
+                    ) else IconButton(onClick = { onActions(node) }, Modifier.align(Alignment.TopEnd).size(32.dp)) {
                         Icon(Icons.Outlined.MoreVert, stringResource(R.string.actions_for, node.name))
                     }
                 }
