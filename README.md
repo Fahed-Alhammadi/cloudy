@@ -19,7 +19,7 @@ source, and the apps talk only to your server: no ads, no analytics, no tracking
 | **Web** | built into the server | Files, sharing, calendar, contacts, administration |
 | **Android** | [Google Play](https://play.google.com/store/apps/details?id=io.cloudy.app) | Files, offline files, photo backup, document scanner, calendar, contacts |
 | **iPhone** | [TestFlight beta](https://testflight.apple.com/join/X1M6sYZm) (App Store soon) | Files with Quick Look, document scanner, sharing, calendar, contacts, Face ID lock |
-| **macOS, Windows, Linux** | [GitHub releases](https://github.com/Fahed-Alhammadi/cloudy/releases) (`desktop-v…`) | Keeps a folder on your computer in sync with your files, like Dropbox |
+| **macOS, Windows, Linux** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases?q=desktop-v&expanded=true) (GitHub releases) | Keeps a folder on your computer in sync with your files |
 | **Other apps** | WebDAV, CalDAV, CardDAV | Finder, Windows Explorer, rclone, Thunderbird, DAVx⁵, Apple Calendar/Contacts |
 
 Desktop downloads: `.dmg` (macOS, Apple silicon or Intel) or `.pkg` (all Macs), `.exe` (Windows), `.AppImage` or
