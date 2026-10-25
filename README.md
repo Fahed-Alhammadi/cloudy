@@ -296,3 +296,7 @@ tests/               end-to-end API/WebDAV/CalDAV/CardDAV tests, translation che
 scripts/             version.py (versions of all three), github-release.sh (tag + release notes)
 .github/workflows/   server.yml, android.yml, ios.yml (each: test → publish on version bump), translations.yml
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 Fahed Alhammadi
