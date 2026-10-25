@@ -14,13 +14,26 @@ enum Route: Hashable {
 
 struct FilesTab: View {
     @Environment(Session.self) private var session
+    @State private var path: [Route] = []
+    @State private var sharing: FileNode?
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             FolderView(id: session.rootId, title: String(localized: "Files"), isRoot: true)
                 .id(session.rootId)
                 .withRoutes()
         }
+        #if DEBUG
+        .task { (path, sharing) = Screenshots.filesPath() }
+        .sheet(item: $sharing) { ShareSheetView(node: $0) }
+        .onReceive(NotificationCenter.default.publisher(for: .tour)) { note in
+            switch note.object as? Screenshots.Step {
+            case .files(let p): path = p
+            case .share(let n): sharing = n
+            default: break
+            }
+        }
+        #endif
     }
 }
 

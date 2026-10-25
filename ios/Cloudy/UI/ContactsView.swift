@@ -12,6 +12,7 @@ struct ContactsView: View {
     @State private var importing = false
     @State private var importResult: String?
     @State private var shareItem: ShareItem?
+    @State private var path: [Contact] = []
 
     private var book: Int64 { Int64(bookId) }
 
@@ -25,7 +26,7 @@ struct ContactsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List(filtered) { c in
                 NavigationLink(value: c) {
                     HStack(spacing: 12) {
@@ -69,6 +70,13 @@ struct ContactsView: View {
                 }
             }
             .refreshable { await load() }
+            #if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .tour)) { note in
+                if case .contact(let name) = note.object as? Screenshots.Step {
+                    path = name.flatMap { n in contacts?.first { $0.displayName == n } }.map { [$0] } ?? []
+                }
+            }
+            #endif
             .task(id: bookId) { await load() }
             .onLiveChange(any: true) { Task { await load() } }
             .sheet(item: $editing) { c in ContactEditor(contact: c, bookId: book) { Task { await load() } } }
@@ -91,6 +99,9 @@ struct ContactsView: View {
             books = b
             if !b.contains(where: { $0.id == book }) { bookId = Int(b.first?.id ?? 0) }
             contacts = book == 0 ? [] : try await API.shared.contacts(book)
+            #if DEBUG
+            if path.isEmpty, let name = Screenshots.contact, let c = contacts?.first(where: { $0.displayName == name }) { path = [c] }
+            #endif
             loadError = nil
         } catch is CancellationError {
         } catch let e as URLError where e.code == .cancelled {

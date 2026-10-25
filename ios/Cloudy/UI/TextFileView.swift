@@ -53,6 +53,12 @@ struct TextFileView: View {
         .interactiveDismissDisabled(dirty)
         .task { await load() }
         .fileActions(actions)
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .tour)) { note in
+            guard case .type(let s) = note.object as? Screenshots.Step else { return }
+            Task { for ch in s { text.append(ch); try? await Task.sleep(nanoseconds: 40_000_000) } }
+        }
+        #endif
         .errorAlert($error)
     }
 

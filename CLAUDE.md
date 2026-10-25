@@ -54,6 +54,7 @@ LibreOffice for office previews, started by `server/docker/entrypoint.sh`), conf
   `Cloudy/UI/` (FilesView, FileActions = menus/Quick Look/share sheet, ShareSheetView, ListsView = favorites/recent/shared/links/trash,
   TextFileView, Pickers = folder picker/photos/VisionKit scanner, CalendarView, ContactsView, MoreView), `Cloudy/Resources/`
   (`Localizable.xcstrings`, `InfoPlist.xcstrings`, `PrivacyInfo.xcprivacy`, assets). README has the App Store checklist.
+  `ios/appstore/` — App Store screenshots (`raw/` simulator captures → `render.py` → `en-US/`); Debug-only `UI/Screenshots.swift` opens screens from env.
 
 ## Tech Stack
 Server: Node 24 running TypeScript directly (type stripping), `pg`, `ical.js`, `fast-xml-parser`, `nodemailer`; Postgres 17 (Debian);
@@ -123,6 +124,8 @@ iOS: Swift 5 mode, SwiftUI + Observation, Quick Look, PhotosUI, VisionKit, Local
 - Known limits: ZIP has no ZIP64 (<4 GB, <65k entries); recurring events edited as a whole series.
 
 ## Change Log
+- 2026-10-25: App Store screenshots (6.9", 6 framed shots with icon) + header/search creative assets (16:9, 21:9, 3:2) + 29 s app preview video in `ios/appstore/`; Debug-only
+  screenshot hooks (`CLOUDY_OPEN`, `CLOUDY_CONTACT`, `CLOUDY_TOUR` scripted walk-through). Signed upload of iOS 1.10.0 (1) to App Store Connect, tagged `ios-v1.10.0`.
 - 2026-10-25: Monorepo split: `app/` → `server/`, `mobile/android` → `android/`, `mobile/ios` → `ios/` (+ `android/README.md`,
   outputs in each `dist/`). Own version + tag per product (`server-v`, `android-v`, `ios-v`), `scripts/version.py`, path-filtered
   workflows `server.yml`/`android.yml`/`ios.yml`/`translations.yml` replace `ci.yml`/`release.yml`; release on version bump

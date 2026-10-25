@@ -79,6 +79,15 @@ struct CalendarView: View {
             .refreshable { await load() }
             .task(id: month) { await load() }
             .onLiveChange(any: true) { Task { await load() } }
+            #if DEBUG
+            .onReceive(NotificationCenter.default.publisher(for: .tour)) { note in
+                switch note.object as? Screenshots.Step {
+                case .month(let n): withAnimation { shift(n) }
+                case .day(let n): withAnimation { selected = cal.date(byAdding: .day, value: n, to: cal.startOfDay(for: Date()))! }
+                default: break
+                }
+            }
+            #endif
             .sheet(item: $editing) { req in
                 EventEditor(event: req.event, day: req.day, calendars: calendars ?? []) { Task { await load() } }
             }
