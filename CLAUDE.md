@@ -95,6 +95,10 @@ iOS: Swift 5 mode, SwiftUI + Observation, Quick Look, PhotosUI, VisionKit, Local
   number go up by one automatically and must never go down). Releasing = version without a `<product>-v` tag reaching main;
   a change without a bump only runs CI. Old `vX.Y.Z` tags (≤1.10.0) count as released for server and Android. Store releases
   stop at Play closed testing / TestFlight; production promotion and App Review submission stay manual.
+- **"What's new" — always:** every user-visible feature or fix in an app, and every Android/iOS version bump, must update
+  the release notes in the same commit: `android/whatsnew/whatsnew-en-US` (Play, ≤ 500 characters) and
+  `ios/whatsnew/en-US.txt` (TestFlight/App Store). English, short "• " bullets describing what's new for users in that
+  version (replace the previous version's text, don't append). Never bump an app version without checking them.
 - Android signing key `android/cloudy-release.keystore` + `keystore.properties` are git-ignored and must be backed up;
   CI signs with the same key from repository secrets.
 - Front end: build DOM with `h()` from `ui.js` (never innerHTML with data); each view exports `renderX(main, ctx)`.
