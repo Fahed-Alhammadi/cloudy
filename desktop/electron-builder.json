@@ -29,6 +29,9 @@
       { "target": "pkg", "arch": ["universal"] }
     ]
   },
+  "dmg": {
+    "sign": true
+  },
   "pkg": {
     "installLocation": "/Applications",
     "isRelocatable": false
