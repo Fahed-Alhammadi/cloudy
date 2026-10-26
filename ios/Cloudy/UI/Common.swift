@@ -22,20 +22,57 @@ func isText(_ n: FileNode) -> Bool {
     return exts.contains(n.ext)
 }
 
+/// File type colors, the same as the Android app (`TypeColor` in Common.kt).
+enum TypeColor {
+    static let folder = Color.accentColor
+    static let image = adaptive(0x0E9AA7)
+    static let video = adaptive(0xE0457B)
+    static let audio = adaptive(0x8B5CF6)
+    static let pdf = adaptive(0xD93A3A)
+    static let archive = adaptive(0xA0782C)
+    static let sheet = adaptive(0x1F9D55)
+    static let slides = adaptive(0xE8772E)
+    static let doc = adaptive(0x3B66D9)
+    static let other = adaptive(0x64748B)
+
+    /// `rgb` in light mode, lifted 40 % toward white in dark mode so glyphs keep their contrast (as on Android).
+    private static func adaptive(_ rgb: Int) -> Color {
+        let r = CGFloat((rgb >> 16) & 0xFF) / 255, g = CGFloat((rgb >> 8) & 0xFF) / 255, b = CGFloat(rgb & 0xFF) / 255
+        return Color(UIColor { traits in
+            let k: CGFloat = traits.userInterfaceStyle == .dark ? 0.4 : 0
+            return UIColor(red: r + (1 - r) * k, green: g + (1 - g) * k, blue: b + (1 - b) * k, alpha: 1)
+        })
+    }
+}
+
 func fileIcon(_ n: FileNode) -> (String, Color) {
-    if n.isDir { return ("folder.fill", .accentColor) }
+    if n.isDir { return ("folder.fill", TypeColor.folder) }
     let mime = n.mime ?? ""
     switch true {
-    case mime.hasPrefix("image/"): return ("photo", .purple)
-    case mime.hasPrefix("video/"): return ("film", .pink)
-    case mime.hasPrefix("audio/"): return ("music.note", .orange)
-    case mime == "application/pdf" || n.ext == "pdf": return ("doc.richtext", .red)
-    case ["zip", "gz", "tgz", "7z", "rar", "tar"].contains(n.ext): return ("doc.zipper", .brown)
-    case ["xls", "xlsx", "ods", "numbers"].contains(n.ext): return ("tablecells", .green)
-    case ["ppt", "pptx", "odp", "key"].contains(n.ext): return ("rectangle.on.rectangle", .orange)
-    case ["doc", "docx", "odt", "rtf", "pages"].contains(n.ext): return ("doc.text", .blue)
-    case isText(n): return ("doc.plaintext", .gray)
-    default: return ("doc", .gray)
+    case mime.hasPrefix("image/"): return ("photo.fill", TypeColor.image)
+    case mime.hasPrefix("video/"): return ("film.fill", TypeColor.video)
+    case mime.hasPrefix("audio/"): return ("music.note", TypeColor.audio)
+    case mime == "application/pdf" || n.ext == "pdf": return ("doc.richtext.fill", TypeColor.pdf)
+    case ["zip", "gz", "tgz", "7z", "rar", "tar"].contains(n.ext): return ("doc.zipper", TypeColor.archive)
+    case ["xls", "xlsx", "ods", "csv", "numbers"].contains(n.ext): return ("tablecells.fill", TypeColor.sheet)
+    case ["ppt", "pptx", "odp", "key"].contains(n.ext): return ("rectangle.on.rectangle.fill", TypeColor.slides)
+    case ["doc", "docx", "odt", "rtf", "pages"].contains(n.ext): return ("doc.text.fill", TypeColor.doc)
+    case isText(n): return ("doc.plaintext.fill", TypeColor.other)
+    default: return ("doc.fill", TypeColor.other)
+    }
+}
+
+/// The file's type as a tinted rounded square (list rows).
+struct TypeTile: View {
+    let node: FileNode
+    var size: CGFloat = 38
+
+    var body: some View {
+        let (icon, color) = fileIcon(node)
+        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
+            .fill(color.opacity(0.14))
+            .frame(width: size, height: size)
+            .overlay { Image(systemName: icon).font(.system(size: size * 0.45, weight: .medium)).foregroundStyle(color) }
     }
 }
 
@@ -44,12 +81,11 @@ struct NodeRow: View {
     var subtitle: String?
 
     var body: some View {
-        let (icon, color) = fileIcon(node)
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.title2).foregroundStyle(color).frame(width: 32)
+            TypeTile(node: node)
             VStack(alignment: .leading, spacing: 2) {
                 Text(node.name).lineLimit(2)
-                Text(subtitle ?? defaultSubtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(subtitle ?? defaultSubtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
             if node.isFavorite { Image(systemName: "star.fill").font(.caption).foregroundStyle(.yellow) }
@@ -60,7 +96,36 @@ struct NodeRow: View {
 
     private var defaultSubtitle: String {
         let date = formatDate(node.modified)
-        return node.isDir ? date : [formatSize(node.bytes), date].filter { !$0.isEmpty }.joined(separator: " · ")
+        return node.isDir ? date : [date, formatSize(node.bytes)].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+}
+
+// MARK: - Avatars
+
+private let avatarColors: [Color] = [.accentColor, TypeColor.image, TypeColor.sheet, TypeColor.slides, TypeColor.video,
+                                     TypeColor.audio, TypeColor.pdf, TypeColor.doc]
+
+/// A stable color per name, the same one the Android app picks (Java's String.hashCode, floor-mod).
+func avatarColor(_ name: String) -> Color {
+    var h: Int32 = 0
+    for unit in name.utf16 { h = h &* 31 &+ Int32(unit) }
+    let n = Int32(avatarColors.count)
+    return avatarColors[Int(((h % n) + n) % n)]
+}
+
+/// Initials in a circle tinted with the name's color.
+struct Avatar: View {
+    let name: String
+    var size: CGFloat = 40
+
+    var body: some View {
+        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
+        let color = avatarColor(name)
+        Text(letters.isEmpty ? "?" : letters)
+            .font(.system(size: size * 0.38, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(Circle().fill(color.opacity(0.16)))
     }
 }
 

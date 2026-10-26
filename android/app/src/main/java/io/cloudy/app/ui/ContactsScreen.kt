@@ -23,6 +23,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -80,10 +82,7 @@ import kotlinx.coroutines.launch
 private fun initials(c: Contact) = c.fn.split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2).joinToString("") { it.take(1) }.uppercase()
 
 @Composable
-private fun Avatar(c: Contact, size: Int = 40) =
-    Box(Modifier.size(size.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-        Text(initials(c).ifEmpty { "?" }, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-    }
+private fun Avatar(c: Contact, size: Int = 40) = Avatar(c.fn, size.dp)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -180,7 +179,9 @@ fun ContactsScreen() {
         topBar = {
             TopAppBar(title = {
                 Box {
-                    TextButton(onClick = { bookMenu = true }) {
+                    // Looks like the other tabs' titles; the arrow shows it opens the address-book list.
+                    TextButton(onClick = { bookMenu = true }, contentPadding = PaddingValues(start = 0.dp, end = 8.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                         Text(book?.name ?: stringResource(R.string.tab_contacts), style = MaterialTheme.typography.titleLarge); Icon(Icons.Outlined.ExpandMore, stringResource(R.string.choose_book))
                     }
                     DropdownMenu(bookMenu, { bookMenu = false }) {
@@ -206,8 +207,7 @@ fun ContactsScreen() {
     ) { pad ->
         Column(Modifier.padding(pad)) {
             if (importing) LinearProgressIndicator(Modifier.fillMaxWidth())
-            OutlinedTextField(query, { query = it }, placeholder = { Text(stringResource(R.string.search_contacts)) }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
+            SearchField(query, { query = it }, stringResource(R.string.search_contacts), Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             val list = contacts?.filter { c ->
                 query.isBlank() || listOf(c.fn, c.org, *c.emails.toTypedArray(), *c.phones.toTypedArray()).any { it.contains(query, ignoreCase = true) }
             }
@@ -215,14 +215,21 @@ fun ContactsScreen() {
                 list == null -> Loading()
                 list.isEmpty() -> EmptyState(Icons.Outlined.Contacts,
                     stringResource(if (contacts.isNullOrEmpty()) R.string.contacts_empty else R.string.no_matches))
-                else -> LazyColumn {
-                    items(list, key = { it.uri }) { c ->
+                else -> LazyColumn(contentPadding = PaddingValues(bottom = 88.dp)) {
+                    // A–Z sections, like the phone's own contacts app.
+                    list.sortedBy { it.fn.lowercase() }.groupBy { it.fn.firstOrNull()?.uppercaseChar()?.takeIf(Char::isLetter) ?: '#' }.forEach { (letter, group) ->
+                        item(key = "section-$letter") {
+                            Text(letter.toString(), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 4.dp))
+                        }
+                    items(group, key = { it.uri }) { c ->
                         ListItem(
                             modifier = Modifier.clickable { editing = c },
                             leadingContent = { Avatar(c) },
                             headlineContent = { Text(c.fn, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             supportingContent = { (c.emails.firstOrNull() ?: c.phones.firstOrNull() ?: c.org.ifEmpty { null })?.let { Text(it, maxLines = 1) } },
                         )
+                    }
                     }
                 }
             }

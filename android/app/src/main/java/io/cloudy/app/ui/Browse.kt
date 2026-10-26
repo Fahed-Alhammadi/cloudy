@@ -118,16 +118,16 @@ fun NodeGrid(items: List<FileNode>, onOpen: (FileNode) -> Unit, onActions: (File
         horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(items, key = { it.id }) { node ->
             val isSelected = selected?.contains(node.id) == true
-            Column(Modifier.clip(RoundedCornerShape(10.dp))
+            Column(Modifier.clip(RoundedCornerShape(18.dp))
                 .background(if (isSelected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
                 .combinedClickable(onClick = { onOpen(node) }, onLongClick = { onActions(node) }).padding(4.dp)) {
-                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainer),
+                Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(16.dp)).background(iconFor(node).second.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center) {
                     // Thumbnails for images (Coil downsamples and caches); other types show their icon.
                     if (node.mime.startsWith("image/") && node.size in 1..20_000_000) {
                         val model: Any = Services.offline.localFile(node) ?: Services.api.downloadUrl(node.id, inline = true)
                         AsyncImage(model, node.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    } else FileIcon(node, Modifier.size(48.dp))
+                    } else FileIcon(node, Modifier.size(44.dp))
                     Row(Modifier.align(Alignment.TopStart).padding(4.dp)) {
                         if (node.favorite) Icon(Icons.Filled.Star, null, tint = androidx.compose.ui.graphics.Color(0xFFE5A50A), modifier = Modifier.size(16.dp))
                         if (Services.offline.isPinned(node.id)) Icon(Icons.Outlined.CloudDone, stringResource(R.string.available_offline), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))

@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -147,44 +148,39 @@ fun CalendarScreen() {
                     val dayEvents = events.filter { onDay(it, day) }
                     val isSel = day == selected
                     Column(
-                        Modifier.weight(1f).aspectRatio(0.9f).clip(RoundedCornerShape(8.dp))
-                            .background(if (isSel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                            .clickable { selected = day },
+                        Modifier.weight(1f).aspectRatio(1.15f).clip(RoundedCornerShape(12.dp)).clickable { selected = day },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         val today = day == LocalDate.now()
-                        Box(Modifier.padding(top = 4.dp).size(26.dp).clip(CircleShape).background(if (today) MaterialTheme.colorScheme.primary else Color.Transparent),
-                            contentAlignment = Alignment.Center) {
-                            Text(day.dayOfMonth.toString(), fontSize = 13.sp, fontWeight = if (today) FontWeight.Bold else FontWeight.Normal,
+                        // Today: filled circle; the selected day: tonal circle.
+                        Box(Modifier.padding(top = 3.dp).size(32.dp).clip(CircleShape).background(when {
+                            today -> MaterialTheme.colorScheme.primary
+                            isSel -> MaterialTheme.colorScheme.primaryContainer
+                            else -> Color.Transparent
+                        }), contentAlignment = Alignment.Center) {
+                            Text(day.dayOfMonth.toString(), fontSize = 14.sp, fontWeight = if (today || isSel) FontWeight.SemiBold else FontWeight.Normal,
                                 color = when {
                                     today -> MaterialTheme.colorScheme.onPrimary
-                                    day.month != month.month -> MaterialTheme.colorScheme.outline
+                                    isSel -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    day.month != month.month -> MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
                                     else -> MaterialTheme.colorScheme.onSurface
                                 })
                         }
-                        Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            dayEvents.take(3).forEach { Box(Modifier.size(6.dp).clip(CircleShape).background(colorOf[it.calendarId] ?: Accent)) }
+                        Row(Modifier.padding(top = 3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            dayEvents.take(3).forEach { Box(Modifier.size(5.dp).clip(CircleShape).background(colorOf[it.calendarId] ?: Accent)) }
                         }
                     }
                 }
             }
-            HorizontalDivider(Modifier.padding(top = 4.dp))
-            Text(selected.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             val today = events.filter { onDay(it, selected) }.sortedWith(compareBy({ !it.allDay }, { startOf(it) }))
-            if (today.isEmpty()) Text(stringResource(R.string.no_events), Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline)
-            LazyColumn {
-                items(today, key = { it.uri + it.start }) { e ->
-                    ListItem(
-                        modifier = Modifier.clickable { editing = e to selected },
-                        leadingContent = { Box(Modifier.width(4.dp).height(36.dp).background(colorOf[e.calendarId] ?: Accent, RoundedCornerShape(2.dp))) },
-                        headlineContent = { Text(e.summary.ifEmpty { stringResource(R.string.no_title) }, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Text(if (e.allDay) stringResource(R.string.all_day) else "${startOf(e).toLocalTime()} – ${endOf(e).toLocalTime()}" + if (e.location.isNotEmpty()) " · ${e.location}" else "")
-                        },
-                        trailingContent = { if (e.recurring) Icon(Icons.Outlined.Repeat, stringResource(R.string.repeats), tint = MaterialTheme.colorScheme.outline) },
-                    )
+            LazyColumn(Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    Text(selected.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")), style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
                 }
+                if (today.isEmpty()) item { Text(stringResource(R.string.no_events), color = MaterialTheme.colorScheme.outline) }
+                items(today, key = { it.uri + it.start }) { e -> EventCard(e, colorOf[e.calendarId] ?: Accent) { editing = e to selected } }
             }
         }
     }
@@ -200,6 +196,29 @@ fun CalendarScreen() {
                 saving = false
             }
         }
+    }
+}
+
+/** One event of the selected day: time column, calendar color bar, title and place. */
+@Composable
+private fun EventCard(e: CalEvent, color: Color, onClick: () -> Unit) {
+    val fmt = DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainerLowest).clickable(onClick = onClick)
+        .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.width(64.dp)) {
+            if (e.allDay) Text(stringResource(R.string.all_day), style = MaterialTheme.typography.labelLarge)
+            else {
+                Text(startOf(e).toLocalTime().format(fmt), style = MaterialTheme.typography.labelLarge)
+                Text(endOf(e).toLocalTime().format(fmt), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Box(Modifier.padding(horizontal = 10.dp).width(4.dp).height(36.dp).background(color, RoundedCornerShape(2.dp)))
+        Column(Modifier.weight(1f)) {
+            Text(e.summary.ifEmpty { stringResource(R.string.no_title) }, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (e.location.isNotEmpty()) Text(e.location, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (e.recurring) Icon(Icons.Outlined.Repeat, stringResource(R.string.repeats), tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(18.dp))
     }
 }
 

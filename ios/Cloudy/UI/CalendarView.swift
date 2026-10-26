@@ -174,23 +174,25 @@ private struct EventRow: View {
     let color: Color
 
     var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text((event.summary ?? "").isEmpty ? String(localized: "(no title)") : event.summary!).font(.body.weight(.medium))
-                    if event.recurring == true { Image(systemName: "repeat").font(.caption).foregroundStyle(.secondary) }
+        // Time column, calendar color bar, then title and place (the same layout as Android's event cards).
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                if event.isAllDay {
+                    Text("All day").font(.subheadline.weight(.semibold))
+                } else {
+                    Text(startOf(event).formatted(date: .omitted, time: .shortened)).font(.subheadline.weight(.semibold))
+                    Text(endOf(event).formatted(date: .omitted, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                 }
-                Text(timeText).font(.caption).foregroundStyle(.secondary)
             }
+            .frame(width: 70, alignment: .leading)
+            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 4, height: 36)
+            VStack(alignment: .leading, spacing: 2) {
+                Text((event.summary ?? "").isEmpty ? String(localized: "(no title)") : event.summary!).font(.body.weight(.medium)).lineLimit(1)
+                if let loc = event.location, !loc.isEmpty { Text(loc).font(.footnote).foregroundStyle(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 0)
+            if event.recurring == true { Image(systemName: "repeat").font(.footnote).foregroundStyle(.secondary) }
         }
-    }
-
-    private var timeText: String {
-        var t = event.isAllDay ? String(localized: "All day")
-            : "\(startOf(event).formatted(date: .omitted, time: .shortened)) – \(endOf(event).formatted(date: .omitted, time: .shortened))"
-        if let loc = event.location, !loc.isEmpty { t += " · " + loc }
-        return t
     }
 }
 

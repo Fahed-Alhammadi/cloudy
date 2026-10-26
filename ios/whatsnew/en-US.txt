@@ -1,3 +1,5 @@
-• Long-press any file for its actions, or choose "Select" to pick several files and share, move, copy, favorite or delete them at once
-• New file view: list or grid with photo thumbnails, and search filters for images, videos, documents and more
-• Recent, Favorites, Shared and Trash are now in the More tab
+• Fresh new look: colored file type icons and shorter dates
+• Contacts sorted into A–Z sections, with a colored avatar for each person
+• Calendar: event times at a glance in the day list
+• More tab with Settings-style icons and your storage at the top
+• Better contrast in dark mode

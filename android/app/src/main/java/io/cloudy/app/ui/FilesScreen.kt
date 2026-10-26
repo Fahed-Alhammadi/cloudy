@@ -433,10 +433,10 @@ fun NodeList(
                 ListItem(
                     modifier = Modifier.combinedClickable(onClick = { open(node) }, onLongClick = { longPress(node) }),
                     colors = if (isSelected) ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.secondaryContainer) else ListItemDefaults.colors(),
-                    leadingContent = { if (selecting) Checkbox(isSelected, onCheckedChange = { toggle(node) }) else FileIcon(node) },
-                    headlineContent = { Text(node.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    leadingContent = { if (selecting) Checkbox(isSelected, onCheckedChange = { toggle(node) }) else FileTile(node) },
+                    headlineContent = { Text(node.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium) },
                     supportingContent = {
-                        Text(subtitle(node) ?: listOfNotNull(if (node.isDir) null else formatSize(node.size), formatDate(node.mtime).ifEmpty { null }).joinToString(" · "),
+                        Text(subtitle(node) ?: listOfNotNull(formatWhen(node.mtime).ifEmpty { null }, if (node.isDir) null else formatSize(node.size)).joinToString(" · "),
                             maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
                     trailingContent = {

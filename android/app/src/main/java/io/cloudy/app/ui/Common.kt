@@ -3,8 +3,29 @@ package io.cloudy.app.ui
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
@@ -18,7 +39,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.AudioFile
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderZip
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -56,16 +76,29 @@ import java.time.format.FormatStyle
 
 val Accent = Color(0xFF0B6BCB)
 
+// Brand scheme for every role, so no Material default (purple) tones show up in bars, chips or selections.
+private val LightColors = lightColorScheme(
+    primary = Accent, onPrimary = Color.White, primaryContainer = Color(0xFFD6E6FA), onPrimaryContainer = Color(0xFF002C5A),
+    secondary = Color(0xFF52606F), onSecondary = Color.White, secondaryContainer = Color(0xFFD9E5F5), onSecondaryContainer = Color(0xFF0F1C2B),
+    tertiary = Color(0xFF00796B), onTertiary = Color.White, tertiaryContainer = Color(0xFFCDEDE8), onTertiaryContainer = Color(0xFF00201C),
+    background = Color(0xFFF8F9FC), onBackground = Color(0xFF191C20), surface = Color(0xFFF8F9FC), onSurface = Color(0xFF191C20),
+    surfaceVariant = Color(0xFFDFE3EB), onSurfaceVariant = Color(0xFF454951), outline = Color(0xFF747880), outlineVariant = Color(0xFFC4C7CF),
+    surfaceTint = Accent, surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF2F4F8), surfaceContainer = Color(0xFFECEFF4),
+    surfaceContainerHigh = Color(0xFFE6E9EF), surfaceContainerHighest = Color(0xFFE0E3E9), surfaceBright = Color(0xFFF8F9FC), surfaceDim = Color(0xFFD8DADF),
+)
+private val DarkColors = darkColorScheme(
+    primary = Color(0xFF8CBDF7), onPrimary = Color(0xFF00315F), primaryContainer = Color(0xFF0E4A8C), onPrimaryContainer = Color(0xFFD6E6FA),
+    secondary = Color(0xFFBAC7DA), onSecondary = Color(0xFF243140), secondaryContainer = Color(0xFF2A3849), onSecondaryContainer = Color(0xFFD9E5F5),
+    tertiary = Color(0xFF7FD6C8), onTertiary = Color(0xFF003731), tertiaryContainer = Color(0xFF005047), onTertiaryContainer = Color(0xFFCDEDE8),
+    background = Color(0xFF111418), onBackground = Color(0xFFE1E2E8), surface = Color(0xFF111418), onSurface = Color(0xFFE1E2E8),
+    surfaceVariant = Color(0xFF44474F), onSurfaceVariant = Color(0xFFC4C6CF), outline = Color(0xFF8E9199), outlineVariant = Color(0xFF44474F),
+    surfaceTint = Color(0xFF8CBDF7), surfaceContainerLowest = Color(0xFF0C0E12), surfaceContainerLow = Color(0xFF191C20), surfaceContainer = Color(0xFF1D2025),
+    surfaceContainerHigh = Color(0xFF272A2F), surfaceContainerHighest = Color(0xFF32353A), surfaceBright = Color(0xFF37393E), surfaceDim = Color(0xFF111418),
+)
+
 @Composable
-fun CloudyTheme(content: @Composable () -> Unit) {
-    val colors = if (isSystemInDarkTheme())
-        darkColorScheme(primary = Color(0xFF4A9DF0), onPrimary = Color(0xFF0A1220), primaryContainer = Color(0xFF1D3350),
-            background = Color(0xFF14181F), surface = Color(0xFF14181F), surfaceContainer = Color(0xFF1B2029))
-    else
-        lightColorScheme(primary = Accent, primaryContainer = Color(0xFFE1ECFA), onPrimaryContainer = Accent,
-            surfaceContainer = Color(0xFFF4F6F9))
-    MaterialTheme(colorScheme = colors, content = content)
-}
+fun CloudyTheme(content: @Composable () -> Unit) =
+    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors, content = content)
 
 fun formatSize(bytes: Long): String {
     val units = listOf("B", "KB", "MB", "GB", "TB")
@@ -81,26 +114,110 @@ private val dateFmt = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, 
 fun formatDate(iso: String): String =
     runCatching { dateFmt.format(Instant.parse(iso).atZone(ZoneId.systemDefault())) }.getOrDefault("")
 
+private val timeFmt = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+private val dayFmt = DateTimeFormatter.ofPattern("d MMM")
+private val dayYearFmt = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+
+/** Short date for lists, like the iPhone app: time today, "12 Oct" this year, the full date before. */
+fun formatWhen(iso: String): String = runCatching {
+    val t = Instant.parse(iso).atZone(ZoneId.systemDefault())
+    val today = java.time.LocalDate.now()
+    when {
+        t.toLocalDate() == today -> timeFmt.format(t)
+        t.year == today.year -> dayFmt.format(t)
+        else -> dayYearFmt.format(t)
+    }
+}.getOrDefault("")
+
 private val ARCHIVE = Regex("zip|tar|gzip|7z|rar")
+
+/** File type colors, the same in the iPhone app (`fileIcon` in Common.swift). */
+object TypeColor {
+    val Folder = Accent
+    val Image = Color(0xFF0E9AA7)
+    val Video = Color(0xFFE0457B)
+    val Audio = Color(0xFF8B5CF6)
+    val Pdf = Color(0xFFD93A3A)
+    val Archive = Color(0xFFA0782C)
+    val Sheet = Color(0xFF1F9D55)
+    val Slides = Color(0xFFE8772E)
+    val Doc = Color(0xFF3B66D9)
+    val Other = Color(0xFF64748B)
+}
 
 fun iconFor(node: FileNode): Pair<ImageVector, Color> {
     val m = node.mime
+    val ext = node.name.substringAfterLast('.', "").lowercase()
     return when {
-        node.isDir -> Icons.Outlined.Folder to Color(0xFF3D8EF0)
-        m.startsWith("image/") -> Icons.Outlined.Image to Color(0xFF2E9E6A)
-        m.startsWith("video/") -> Icons.Outlined.VideoFile to Color(0xFFC05621)
-        m.startsWith("audio/") -> Icons.Outlined.AudioFile to Color(0xFF8B5CF6)
-        m == "application/pdf" -> Icons.Outlined.PictureAsPdf to Color(0xFFD03B3B)
-        ARCHIVE.containsMatchIn(m) -> Icons.Outlined.FolderZip to Color(0xFFA07A2C)
-        m.startsWith("text/") || m.contains("json") || m.contains("xml") -> Icons.Outlined.Article to Color(0xFF64708A)
-        else -> Icons.AutoMirrored.Outlined.InsertDriveFile to Color(0xFF64708A)
+        node.isDir -> Icons.Filled.Folder to TypeColor.Folder
+        m.startsWith("image/") -> Icons.Outlined.Image to TypeColor.Image
+        m.startsWith("video/") -> Icons.Outlined.VideoFile to TypeColor.Video
+        m.startsWith("audio/") -> Icons.Outlined.AudioFile to TypeColor.Audio
+        m == "application/pdf" || ext == "pdf" -> Icons.Outlined.PictureAsPdf to TypeColor.Pdf
+        ARCHIVE.containsMatchIn(m) -> Icons.Outlined.FolderZip to TypeColor.Archive
+        ext in setOf("xls", "xlsx", "ods", "csv", "numbers") -> Icons.Outlined.TableChart to TypeColor.Sheet
+        ext in setOf("ppt", "pptx", "odp", "key") -> Icons.Outlined.Slideshow to TypeColor.Slides
+        ext in setOf("doc", "docx", "odt", "rtf", "pages") -> Icons.Outlined.Description to TypeColor.Doc
+        m.startsWith("text/") || m.contains("json") || m.contains("xml") -> Icons.Outlined.Article to TypeColor.Other
+        else -> Icons.AutoMirrored.Outlined.InsertDriveFile to TypeColor.Other
     }
 }
 
+/** Type and avatar colors are tuned for light backgrounds; in dark mode they are lifted so glyphs keep their contrast. */
+@Composable
+fun Color.forTheme(): Color = if (isSystemInDarkTheme()) androidx.compose.ui.graphics.lerp(this, Color.White, 0.4f) else this
+
 @Composable
 fun FileIcon(node: FileNode, modifier: Modifier = Modifier.size(32.dp)) {
-    val (icon, tint) = iconFor(node)
+    val (icon, base) = iconFor(node)
+    val tint = base.forTheme()
     Icon(icon, contentDescription = null, tint = tint, modifier = modifier)
+}
+
+/** The file's type as a tinted rounded square (list rows); [size] scales the glyph with it. */
+@Composable
+fun FileTile(node: FileNode, size: Dp = 40.dp) {
+    val (icon, base) = iconFor(node)
+    val tint = base.forTheme()
+    Box(Modifier.size(size).clip(RoundedCornerShape(size * 0.28f)).background(tint.copy(alpha = if (isSystemInDarkTheme()) 0.22f else 0.12f)),
+        contentAlignment = Alignment.Center) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(size * 0.55f))
+    }
+}
+
+private val AVATAR_COLORS = listOf(0xFF0B6BCB, 0xFF0E9AA7, 0xFF1F9D55, 0xFFE8772E, 0xFFE0457B, 0xFF8B5CF6, 0xFFD93A3A, 0xFF3B66D9).map { Color(it) }
+
+/** A stable color per name, so a person keeps their avatar color everywhere. */
+fun avatarColor(name: String): Color = AVATAR_COLORS[Math.floorMod(name.hashCode(), AVATAR_COLORS.size)]
+
+/** Initials in a circle filled with the name's color. */
+@Composable
+fun Avatar(name: String, size: Dp = 40.dp) {
+    val initials = name.split(' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.take(1) }.uppercase().ifEmpty { "?" }
+    val color = avatarColor(name).forTheme()
+    Box(Modifier.size(size).clip(CircleShape).background(color.copy(alpha = if (isSystemInDarkTheme()) 0.3f else 0.16f)), contentAlignment = Alignment.Center) {
+        Text(initials, color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+    }
+}
+
+/** Pill-shaped search field (Material 3 search bar look) for lists that filter as you type. */
+@Composable
+fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    BasicTextField(value, onChange, singleLine = true, textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
+        cursorBrush = SolidColor(colors.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        modifier = modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(26.dp)).background(colors.surfaceContainerHigh),
+        decorationBox = { inner ->
+            Row(Modifier.padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Search, null, tint = colors.onSurfaceVariant)
+                Box(Modifier.weight(1f).padding(start = 12.dp)) {
+                    if (value.isEmpty()) Text(placeholder, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                    inner()
+                }
+                if (value.isNotEmpty()) IconButton(onClick = { onChange("") }) { Icon(Icons.Outlined.Close, stringResource(R.string.cancel)) }
+                else Box(Modifier.width(12.dp))
+            }
+        })
 }
 
 fun toast(context: Context, msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()

@@ -1,5 +1,19 @@
 package io.cloudy.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import android.net.Uri
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -170,70 +184,91 @@ fun MoreScreen(nav: NavController) {
     val u = Services.session.user.value
 
     Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.more)) }) }) { pad ->
-        Column(Modifier.padding(pad).verticalScroll(rememberScrollState())) {
-            ListItem(
-                headlineContent = { Text(u?.displayName ?: "", style = MaterialTheme.typography.titleMedium) },
-                supportingContent = {
-                    Column {
-                        Text("${u?.id} · ${Services.session.server}")
-                        val used = u?.used ?: 0
-                        val quota = u?.quotaBytes
-                        Text(if (quota != null) stringResource(R.string.storage_used_of, formatSize(used), formatSize(quota)) else stringResource(R.string.storage_used, formatSize(used)))
-                        if (quota != null && quota > 0) LinearProgressIndicator(progress = { (used.toFloat() / quota).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
-                    }
-                },
-            )
-            HorizontalDivider()
+        Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
+            val itemColors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            @Composable
+            fun Group(content: @Composable () -> Unit) =
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerLowest)) { content() }
+            @Composable
+            fun Badge(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+                      bg: Color = MaterialTheme.colorScheme.primaryContainer) =
+                Box(Modifier.size(36.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
             @Composable
             fun Entry(label: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, route: String) =
-                ListItem(modifier = Modifier.clickable { nav.navigate(route) }, leadingContent = { Icon(icon, null) }, headlineContent = { Text(stringResource(label)) })
-            Entry(R.string.recent, Icons.Outlined.AccessTime, "list/recent")
-            Entry(R.string.favorites, Icons.Outlined.Star, "list/favorites")
-            Entry(R.string.shared_with_you, Icons.Outlined.People, "list/shared-in")
-            Entry(R.string.shared_by_you, Icons.Outlined.Share, "list/shared-out")
-            Entry(R.string.available_offline, Icons.Outlined.CloudDone, "list/offline")
-            Entry(R.string.deleted_files, Icons.Outlined.Delete, "trash")
-            HorizontalDivider()
-            Entry(R.string.photo_backup, Icons.Outlined.PhotoCamera, "backup")
-            Entry(R.string.connection_check, Icons.Outlined.NetworkCheck, "connection")
-            HorizontalDivider()
-            Text(stringResource(R.string.section_security), Modifier.padding(start = 16.dp, top = 12.dp),
+                ListItem(modifier = Modifier.clickable { nav.navigate(route) }, colors = itemColors, leadingContent = { Badge(icon) },
+                    headlineContent = { Text(stringResource(label)) },
+                    trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline) })
+
+            Group {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(u?.displayName ?: "", 56.dp)
+                    Column(Modifier.padding(start = 16.dp).weight(1f)) {
+                        Text(u?.displayName ?: "", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${u?.id} · ${Services.session.server.substringAfter("://")}", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                val used = u?.used ?: 0
+                val quota = u?.quotaBytes
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    if (quota != null && quota > 0) LinearProgressIndicator(progress = { (used.toFloat() / quota).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), drawStopIndicator = {}, gapSize = 0.dp)
+                    Text(if (quota != null) stringResource(R.string.storage_used_of, formatSize(used), formatSize(quota)) else stringResource(R.string.storage_used, formatSize(used)),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+            Group {
+                Entry(R.string.recent, Icons.Outlined.AccessTime, "list/recent")
+                Entry(R.string.favorites, Icons.Outlined.Star, "list/favorites")
+                Entry(R.string.shared_with_you, Icons.Outlined.People, "list/shared-in")
+                Entry(R.string.shared_by_you, Icons.Outlined.Share, "list/shared-out")
+                Entry(R.string.available_offline, Icons.Outlined.CloudDone, "list/offline")
+                Entry(R.string.deleted_files, Icons.Outlined.Delete, "trash")
+            }
+            Group {
+                Entry(R.string.photo_backup, Icons.Outlined.PhotoCamera, "backup")
+                Entry(R.string.connection_check, Icons.Outlined.NetworkCheck, "connection")
+            }
+            Text(stringResource(R.string.section_security), Modifier.padding(start = 32.dp, top = 14.dp, bottom = 2.dp),
                 style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            ListItem(
-                modifier = Modifier.clickable { chooseLanguage = true },
-                leadingContent = { Icon(Icons.Outlined.Language, null) },
-                headlineContent = { Text(stringResource(R.string.language)) },
-                supportingContent = { Text(Lang.current(context)?.let { Lang.NAMES[it] } ?: stringResource(R.string.language_system)) },
-            )
-            val lockAvailable = remember { AppLock.isAvailable(context) }
-            val confirmTitle = stringResource(R.string.app_lock_turn_on)
-            ListItem(
-                leadingContent = { Icon(Icons.Outlined.Fingerprint, null) },
-                headlineContent = { Text(stringResource(R.string.app_lock)) },
-                supportingContent = { Text(stringResource(if (lockAvailable || lockOn) R.string.app_lock_summary else R.string.app_lock_unavailable)) },
-                trailingContent = {
-                    Switch(lockOn, enabled = lockAvailable || lockOn, onCheckedChange = { on ->
-                        if (!on) { AppLock.setEnabled(context, false); lockOn = false }
-                        // Turning it on asks once, so nobody locks themselves out by accident.
-                        else context.findActivity()?.let { AppLock.confirm(it, confirmTitle) { AppLock.setEnabled(context, true); lockOn = true } }
-                    })
-                },
-            )
-            Entry(R.string.devices, Icons.Outlined.Devices, "devices")
-            HorizontalDivider()
-            ListItem(
-                modifier = Modifier.clickable { confirmLogout = true },
-                leadingContent = { Icon(Icons.AutoMirrored.Outlined.Logout, null, tint = MaterialTheme.colorScheme.error) },
-                headlineContent = { Text(stringResource(R.string.log_out), color = MaterialTheme.colorScheme.error) },
-            )
-            ListItem(
-                leadingContent = { Icon(Icons.Outlined.Info, null) },
-                headlineContent = { Text(stringResource(R.string.version, BuildConfig.VERSION_NAME)) },
-            )
+            Group {
+                ListItem(
+                    modifier = Modifier.clickable { chooseLanguage = true }, colors = itemColors,
+                    leadingContent = { Badge(Icons.Outlined.Language) },
+                    headlineContent = { Text(stringResource(R.string.language)) },
+                    supportingContent = { Text(Lang.current(context)?.let { Lang.NAMES[it] } ?: stringResource(R.string.language_system)) },
+                )
+                val lockAvailable = remember { AppLock.isAvailable(context) }
+                val confirmTitle = stringResource(R.string.app_lock_turn_on)
+                ListItem(
+                    colors = itemColors,
+                    leadingContent = { Badge(Icons.Outlined.Fingerprint) },
+                    headlineContent = { Text(stringResource(R.string.app_lock)) },
+                    supportingContent = { Text(stringResource(if (lockAvailable || lockOn) R.string.app_lock_summary else R.string.app_lock_unavailable)) },
+                    trailingContent = {
+                        Switch(lockOn, enabled = lockAvailable || lockOn, onCheckedChange = { on ->
+                            if (!on) { AppLock.setEnabled(context, false); lockOn = false }
+                            // Turning it on asks once, so nobody locks themselves out by accident.
+                            else context.findActivity()?.let { AppLock.confirm(it, confirmTitle) { AppLock.setEnabled(context, true); lockOn = true } }
+                        })
+                    },
+                )
+                Entry(R.string.devices, Icons.Outlined.Devices, "devices")
+            }
+            Group {
+                ListItem(
+                    modifier = Modifier.clickable { confirmLogout = true }, colors = itemColors,
+                    leadingContent = { Badge(Icons.AutoMirrored.Outlined.Logout, MaterialTheme.colorScheme.error, MaterialTheme.colorScheme.errorContainer) },
+                    headlineContent = { Text(stringResource(R.string.log_out), color = MaterialTheme.colorScheme.error) },
+                )
+            }
             // Adding up the offline folder reads the disk: done in the background, shown when ready.
             val offlineBytes by produceState<Long?>(null) { value = withContext(Dispatchers.IO) { Services.offline.usedBytes() } }
-            offlineBytes?.let { bytes -> Text(stringResource(R.string.offline_storage, formatSize(bytes)), Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline) }
+            Text(listOfNotNull(stringResource(R.string.version, BuildConfig.VERSION_NAME),
+                offlineBytes?.let { stringResource(R.string.offline_storage, formatSize(it)) }).joinToString("\n"),
+                Modifier.fillMaxWidth().padding(16.dp), textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
     }
     if (chooseLanguage) LanguageDialog { chooseLanguage = false }

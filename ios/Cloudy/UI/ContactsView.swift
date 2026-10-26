@@ -25,15 +25,33 @@ struct ContactsView: View {
         }
     }
 
+    private var sections: [(letter: String, contacts: [Contact])] {
+        var result: [(letter: String, contacts: [Contact])] = []
+        for c in filtered {
+            let first = c.displayName.first.map { $0.isLetter ? String($0).uppercased() : "#" } ?? "#"
+            if result.last?.letter == first { result[result.count - 1].contacts.append(c) } else { result.append((first, [c])) }
+        }
+        return result
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
-            List(filtered) { c in
-                NavigationLink(value: c) {
-                    HStack(spacing: 12) {
-                        Initials(name: c.displayName)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(c.displayName)
-                            if !c.org.isEmpty { Text(c.org).font(.caption).foregroundStyle(.secondary) }
+            List {
+                // A–Z sections, like the Contacts app.
+                ForEach(sections, id: \.letter) { section in
+                    Section(section.letter) {
+                        ForEach(section.contacts) { c in
+                            NavigationLink(value: c) {
+                                HStack(spacing: 12) {
+                                    Avatar(name: c.displayName)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(c.displayName)
+                                        if let detail = [c.org].filter({ !$0.isEmpty }).first ?? c.emails.first ?? c.phones.first {
+                                            Text(detail).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -132,18 +150,6 @@ struct ContactsView: View {
     }
 }
 
-private struct Initials: View {
-    let name: String
-
-    var body: some View {
-        let letters = name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased()
-        Text(letters.isEmpty ? "?" : letters)
-            .font(.subheadline.bold()).foregroundStyle(.white)
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.accentColor.gradient))
-    }
-}
-
 struct ContactDetail: View {
     @State var contact: Contact
     let bookId: Int64
@@ -157,7 +163,7 @@ struct ContactDetail: View {
         List {
             Section {
                 VStack(spacing: 8) {
-                    Initials(name: contact.displayName).scaleEffect(2).frame(height: 80)
+                    Avatar(name: contact.displayName, size: 80)
                     Text(contact.displayName).font(.title2.bold())
                     let job = [contact.title, contact.org].filter { !$0.isEmpty }.joined(separator: " · ")
                     if !job.isEmpty { Text(job).foregroundStyle(.secondary) }

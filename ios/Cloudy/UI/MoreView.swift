@@ -18,9 +18,9 @@ struct MoreView: View {
                 if let user = session.user {
                     Section {
                         HStack(spacing: 14) {
-                            Image(systemName: "person.crop.circle.fill").font(.system(size: 44)).foregroundStyle(.tint)
+                            Avatar(name: user.name, size: 52)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(user.name).font(.headline)
+                                Text(user.name).font(.title3.weight(.semibold))
                                 Text(verbatim: "\(user.id) · \(URL(string: session.server)?.host ?? session.server)")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
@@ -30,16 +30,16 @@ struct MoreView: View {
                 }
                 // Same entries and order as Android's More screen; the Files tab only shows the folders.
                 Section {
-                    NavigationLink(value: Route.list(.recent)) { Label("Recent", systemImage: "clock") }
-                    NavigationLink(value: Route.list(.favorites)) { Label("Favorites", systemImage: "star") }
-                    NavigationLink(value: Route.list(.shared)) { Label("Shared with you", systemImage: "person.2") }
-                    NavigationLink(value: Route.links) { Label("Shared by you", systemImage: "link") }
-                    NavigationLink(value: Route.trash) { Label("Trash", systemImage: "trash") }
+                    NavigationLink(value: Route.list(.recent)) { SettingsLabel("Recent", icon: "clock.fill", color: .blue) }
+                    NavigationLink(value: Route.list(.favorites)) { SettingsLabel("Favorites", icon: "star.fill", color: .orange) }
+                    NavigationLink(value: Route.list(.shared)) { SettingsLabel("Shared with you", icon: "person.2.fill", color: .green) }
+                    NavigationLink(value: Route.links) { SettingsLabel("Shared by you", icon: "link", color: .teal) }
+                    NavigationLink(value: Route.trash) { SettingsLabel("Trash", icon: "trash.fill", color: .gray) }
                 }
                 Section {
-                    NavigationLink { DevicesView() } label: { Label("Devices", systemImage: "iphone") }
+                    NavigationLink { DevicesView() } label: { SettingsLabel("Devices", icon: "iphone", color: .indigo) }
                     if canUseAppLock {
-                        Toggle(isOn: $appLock) { Label("App lock", systemImage: "faceid") }
+                        Toggle(isOn: $appLock) { SettingsLabel("App lock", icon: "faceid", color: .green) }
                     }
                     Button {
                         if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) }
@@ -47,7 +47,7 @@ struct MoreView: View {
                         LabeledContent {
                             Text(Locale.current.localizedString(forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en") ?? "")
                         } label: {
-                            Label("Language", systemImage: "globe")
+                            SettingsLabel("Language", icon: "globe", color: .blue)
                         }
                     }
                     .foregroundStyle(.primary)
@@ -56,9 +56,9 @@ struct MoreView: View {
                 }
                 Section {
                     if let web = URL(string: session.server) {
-                        Link(destination: web) { Label("Open Cloudy on the web", systemImage: "safari") }
+                        Link(destination: web) { SettingsLabel("Open Cloudy on the web", icon: "safari.fill", color: .blue).foregroundStyle(.primary) }
                     }
-                    Link(destination: privacyPolicyURL) { Label("Privacy policy", systemImage: "hand.raised") }
+                    Link(destination: privacyPolicyURL) { SettingsLabel("Privacy policy", icon: "hand.raised.fill", color: .purple).foregroundStyle(.primary) }
                     LabeledContent("Version", value: version)
                 }
                 Section {
@@ -73,6 +73,31 @@ struct MoreView: View {
             } message: {
                 Text("Files downloaded to this iPhone are removed. Your data stays on the server.")
             }
+        }
+    }
+}
+
+/// A row label with a white symbol on a colored rounded square, like the Settings app.
+private struct SettingsLabel: View {
+    let title: LocalizedStringKey
+    let icon: String
+    let color: Color
+
+    init(_ title: LocalizedStringKey, icon: String, color: Color) {
+        self.title = title
+        self.icon = icon
+        self.color = color
+    }
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 29, height: 29)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color.gradient))
         }
     }
 }
