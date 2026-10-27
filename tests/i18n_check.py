@@ -3,9 +3,9 @@
 
 - web: every t('…') text in server/public/js has an entry in each server/public/i18n/<lang>.json, same {placeholders}
 - Android: every string in res/values has each res/values-<lang> translation, same %1$s/%1$d arguments
-- iOS: every string in Localizable.xcstrings / InfoPlist.xcstrings is translated into each language, same %@/%lld
+- iOS + macOS Drive: every string in Localizable.xcstrings / InfoPlist.xcstrings (and drive/) is translated into each language, same %@/%lld
 - desktop: every t('…') text in desktop/src (main process and window) has an entry in each desktop/i18n/<lang>.json
-- the language list is the same in server/src/i18n.ts, js/i18n.js, locales_config.xml, Lang.kt, the iOS Info.plist
+- the language list is the same in server/src/i18n.ts, js/i18n.js, locales_config.xml, Lang.kt, the iOS and Drive Info.plist
   and desktop/src/main/i18n.ts
 """
 import glob, json, os, re, sys
@@ -30,6 +30,7 @@ lists = {
     'server/public/js/i18n.js': langs_in('server/public/js/i18n.js', r"\['(\w+)', '[^']+'\]"),
     'locales_config.xml': langs_in('android/app/src/main/res/xml/locales_config.xml', r'android:name="(\w+)"'),
     'iOS Info.plist': re.findall(r'<string>(\w\w)</string>', re.search(r'CFBundleLocalizations</key>\s*<array>(.*?)</array>', open(os.path.join(IOS, 'Info.plist')).read(), re.S).group(1)),
+    'Drive Info.plist': re.findall(r'<string>(\w\w)</string>', re.search(r'CFBundleLocalizations</key>\s*<array>(.*?)</array>', open(os.path.join(ROOT, 'drive/CloudyDrive/Info.plist')).read(), re.S).group(1)),
     'desktop/src/main/i18n.ts': re.findall(r"'(\w+)'", re.search(r"LANGUAGES = \[([^\]]+)\]", open(os.path.join(DESKTOP, 'src/main/i18n.ts')).read()).group(1)),
     'Lang.kt': re.findall(r'"(\w+)"', re.search(r'val CODES = listOf\(([^)]*)\)', open(os.path.join(ROOT, 'android/app/src/main/java/io/cloudy/app/data/Lang.kt')).read()).group(1)),
 }
@@ -91,19 +92,22 @@ for lang in translated:
 # ---- iOS (String Catalogs; Xcode adds new keys from the Swift code when the app is built in Xcode)
 ios_count = 0
 fmt = lambda s: sorted(re.findall(r'%(?:\d\$)?(?:lld|ld|d|@)', s))
-for catalog in ('Localizable', 'InfoPlist'):
-    cat = json.load(open(os.path.join(IOS, f'Resources/{catalog}.xcstrings')))
+# The macOS Cloudy Drive app (drive/) uses the same format and is checked with them.
+for path in (f'{IOS}/Resources/Localizable.xcstrings', f'{IOS}/Resources/InfoPlist.xcstrings',
+             os.path.join(ROOT, 'drive/Resources/Localizable.xcstrings')):
+    catalog = os.path.relpath(path, ROOT)
+    cat = json.load(open(path))
     for key, entry in cat['strings'].items():
         if entry.get('shouldTranslate') is False: continue
         ios_count += 1
         for lang in translated:
             unit = entry.get('localizations', {}).get(lang, {}).get('stringUnit')
             if not unit or unit.get('state') != 'translated' or not unit.get('value'):
-                errors.append(f'ios {lang}: missing "{key}" in {catalog}.xcstrings')
+                errors.append(f'ios {lang}: missing "{key}" in {catalog}')
             elif fmt(key) != fmt(unit['value']):
                 errors.append(f'ios {lang}: format arguments differ in "{key}"')
 
 if errors:
     print('\n'.join(errors))
     sys.exit(1)
-print(f'i18n OK: {len(first)} languages, {len(keys)} web strings, {len(base)} Android strings, {ios_count} iOS strings, {len(desktop_keys)} desktop strings')
+print(f'i18n OK: {len(first)} languages, {len(keys)} web strings, {len(base)} Android strings, {ios_count} iOS/macOS strings, {len(desktop_keys)} desktop strings')
