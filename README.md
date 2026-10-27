@@ -20,7 +20,7 @@ source, and the apps talk only to your server: no ads, no analytics, no tracking
 | **Android** | [Google Play](https://play.google.com/store/apps/details?id=io.cloudy.app) | Files, offline files, photo backup, document scanner, calendar, contacts |
 | **iPhone** | [TestFlight beta](https://testflight.apple.com/join/X1M6sYZm) (App Store soon) | Files with Quick Look, document scanner, sharing, calendar, contacts, Face ID lock |
 | **macOS, Windows, Linux** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/desktop-v1.0.1) (GitHub releases) | Keeps a folder on your computer in sync with your files |
-| **Cloudy Drive (macOS)** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/drive-v1.0.2) (GitHub releases) | All your files in Finder, downloaded only when you open them (saves disk space) |
+| **Cloudy Drive (macOS)** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/drive-v1.0.3) (GitHub releases) | All your files in Finder, downloaded only when you open them (saves disk space) |
 | **Other apps** | WebDAV, CalDAV, CardDAV | Finder, Windows Explorer, rclone, Thunderbird, DAVx⁵, Apple Calendar/Contacts |
 
 Desktop downloads: `.dmg` (macOS, Apple silicon or Intel) or `.pkg` (all Macs), `.exe` (Windows), `.AppImage` or

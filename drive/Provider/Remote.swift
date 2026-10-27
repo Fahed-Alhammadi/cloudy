@@ -38,14 +38,17 @@ enum Remote {
         Dictionary(items.map { ($0.itemIdentifier.rawValue, $0.versionKey) }, uniquingKeysWith: { a, _ in a })
     }
 
-    /// Everything that changed since the index was last updated, in folders macOS has listed. Only folders whose
-    /// etag moved are read again; an unchanged root costs one request.
+    /// Everything that changed since the index was last updated. Only folders whose etag moved are read again; an
+    /// unchanged root costs one request. A folder the index doesn't know yet (created in Finder, or the index was
+    /// reset) is read once and everything in it reported, so no folder is left without change tracking.
     static func changes() async throws -> (updated: [Item], deleted: [NSFileProviderItemIdentifier]) {
         var updated: [String: Item] = [:]
         var deleted = Set<String>()
+        var read = 0
 
         func walk(_ container: NSFileProviderItemIdentifier) async throws {
-            guard let old = Index.shared.folder(container.rawValue) else { return }
+            let old = Index.shared.folder(container.rawValue)
+            read += 1
             let fetched: (etag: String, items: [Item])
             do {
                 fetched = try await fetch(container)
@@ -55,18 +58,18 @@ enum Remote {
                 deleted.insert(container.rawValue)
                 return
             }
-            if fetched.etag == old.etag { return }
+            if let old, fetched.etag == old.etag { return }
             let now = versions(fetched.items)
             for item in fetched.items {
                 let id = item.itemIdentifier.rawValue
-                if old.children[id] != item.versionKey { updated[id] = item }
+                if old?.children[id] != item.versionKey { updated[id] = item }
             }
-            deleted.formUnion(old.children.keys.filter { now[$0] == nil })
+            if let old { deleted.formUnion(old.children.keys.filter { now[$0] == nil }) }
             Index.shared.record(container.rawValue, etag: fetched.etag, children: now)
             for item in fetched.items where item.node.isDir {
                 let id = item.itemIdentifier
                 // The listing carries each child folder's etag, so unchanged folders aren't read again.
-                if id != .shared, let known = Index.shared.folder(id.rawValue), known.etag != (item.node.etag ?? "") {
+                if id != .shared, Index.shared.folder(id.rawValue)?.etag != (item.node.etag ?? "") {
                     try await walk(id)
                 }
             }
@@ -78,6 +81,7 @@ enum Remote {
         // A node moved between two listed folders shows up as updated in its new place, not deleted.
         deleted.subtract(updated.keys)
         Index.shared.forget(deleted)
+        log.info("Changes: read \(read) folders, \(updated.count) updated, \(deleted.count) deleted")
         return (Array(updated.values), deleted.map { NSFileProviderItemIdentifier($0) })
     }
 }

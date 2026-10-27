@@ -17,7 +17,9 @@ or contacts. The [desktop app](../desktop/README.md) is the other option: it kee
 - **Server → Mac:** the menu bar app holds the SSE stream (`/api/events`) and signals the working set on every
   event, every 5 minutes and after wake. `Remote.changes()` then walks down from the root and re-reads only folders
   whose etag changed. Server etags change all the way up the tree, so an unchanged root costs one request.
-  `Shared/Index.swift` remembers what macOS was last told: per listed folder, its etag and a version per child.
+  `Shared/Index.swift` remembers what macOS was last told: per folder, its etag and a version per child. A folder
+  it doesn't know yet (made in Finder, or after the index was reset) is read once and all of it reported, so every
+  folder is tracked, not only the ones Finder has opened. The log says how many folders each pass read.
   "Shared with me" has no etag, so its list is compared on each pass.
 - **Item ids:** node id as a string; the user's root is `.rootContainer`; `shared` is the virtual folder. Share roots
   can't be renamed, moved or deleted; read-only shares are read-only in Finder.
