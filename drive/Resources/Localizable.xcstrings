@@ -29,6 +29,34 @@
         }
       }
     },
+    "Check for Updates…": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "البحث عن تحديثات…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Updates suchen…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar actualizaciones…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher des mises à jour…"
+          }
+        }
+      }
+    },
     "Cloudy Drive": {
       "localizations": {
         "ar": {
@@ -53,6 +81,62 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cloudy Drive"
+          }
+        }
+      }
+    },
+    "Cloudy Drive %@ is available": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتوفر Cloudy Drive %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ ist verfügbar"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ está disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ est disponible"
+          }
+        }
+      }
+    },
+    "Cloudy Drive %@ is the latest version.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ هو أحدث إصدار."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ ist die neueste Version."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ es la versión más reciente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloudy Drive %@ est la dernière version."
           }
         }
       }
@@ -113,30 +197,58 @@
         }
       }
     },
-    "Download Cloudy Drive %@": {
+    "Could not update": {
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تنزيل Cloudy Drive %@"
+            "value": "تعذّر التحديث"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cloudy Drive %@ laden"
+            "value": "Aktualisierung fehlgeschlagen"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descargar Cloudy Drive %@"
+            "value": "No se pudo actualizar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Télécharger Cloudy Drive %@"
+            "value": "Mise à jour impossible"
+          }
+        }
+      }
+    },
+    "Could not verify the downloaded app.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر التحقق من التطبيق الذي تم تنزيله."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die geladene App konnte nicht geprüft werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo verificar la app descargada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de vérifier l’app téléchargée."
           }
         }
       }
@@ -225,6 +337,34 @@
         }
       }
     },
+    "Install and Relaunch": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تثبيت وإعادة التشغيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installieren und neu starten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instalar y reiniciar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer et redémarrer"
+          }
+        }
+      }
+    },
     "Invalid server address": {
       "localizations": {
         "ar": {
@@ -249,6 +389,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adresse du serveur invalide"
+          }
+        }
+      }
+    },
+    "Later": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لاحقًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Später"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más tarde"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus tard"
           }
         }
       }
@@ -305,6 +473,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ouvrir Cloudy sur le web"
+          }
+        }
+      }
+    },
+    "Open Download Page": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح صفحة التنزيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloadseite öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir la página de descarga"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la page de téléchargement"
           }
         }
       }
@@ -617,6 +813,90 @@
         }
       }
     },
+    "The download does not contain Cloudy Drive.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يحتوي التنزيل على Cloudy Drive."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Download enthält Cloudy Drive nicht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La descarga no contiene Cloudy Drive."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le téléchargement ne contient pas Cloudy Drive."
+          }
+        }
+      }
+    },
+    "The download is damaged (checksum mismatch).": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التنزيل تالف (المجموع الاختباري غير مطابق)."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Download ist beschädigt (Prüfsumme stimmt nicht)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La descarga está dañada (la suma de verificación no coincide)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le téléchargement est endommagé (somme de contrôle incorrecte)."
+          }
+        }
+      }
+    },
+    "The download is not signed by the Cloudy Drive developer.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التنزيل غير موقّع من مطوّر Cloudy Drive."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Download ist nicht vom Entwickler von Cloudy Drive signiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La descarga no está firmada por el desarrollador de Cloudy Drive."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le téléchargement n’est pas signé par le développeur de Cloudy Drive."
+          }
+        }
+      }
+    },
     "The server's HTTPS certificate isn't trusted": {
       "localizations": {
         "ar": {
@@ -701,6 +981,34 @@
         }
       }
     },
+    "Update to Cloudy Drive %@…": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحديث إلى Cloudy Drive %@…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf Cloudy Drive %@ aktualisieren…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar a Cloudy Drive %@…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre à jour vers Cloudy Drive %@…"
+          }
+        }
+      }
+    },
     "Username": {
       "localizations": {
         "ar": {
@@ -725,6 +1033,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nom d'utilisateur"
+          }
+        }
+      }
+    },
+    "You have version %@. Cloudy Drive can't replace itself in this folder; download the new version instead.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك الإصدار %@. لا يستطيع Cloudy Drive استبدال نفسه في هذا المجلد، لذا نزّل الإصدار الجديد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast Version %@. Cloudy Drive kann sich in diesem Ordner nicht ersetzen; lade stattdessen die neue Version."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes la versión %@. Cloudy Drive no puede reemplazarse en esta carpeta; descarga la nueva versión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez la version %@. Cloudy Drive ne peut pas se remplacer dans ce dossier ; téléchargez plutôt la nouvelle version."
+          }
+        }
+      }
+    },
+    "You have version %@. Download and install it now? Cloudy Drive will relaunch.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك الإصدار %@. هل تريد تنزيله وتثبيته الآن؟ سيُعاد تشغيل Cloudy Drive."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast Version %@. Jetzt laden und installieren? Cloudy Drive wird neu gestartet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes la versión %@. ¿Descargarla e instalarla ahora? Cloudy Drive se reiniciará."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez la version %@. La télécharger et l’installer maintenant ? Cloudy Drive va redémarrer."
+          }
+        }
+      }
+    },
+    "You have version %@. Download it from GitHub.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك الإصدار %@. نزّل الإصدار الجديد من GitHub."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast Version %@. Lade die neue Version von GitHub."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes la versión %@. Descarga la nueva desde GitHub."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez la version %@. Téléchargez la nouvelle sur GitHub."
+          }
+        }
+      }
+    },
+    "You have version %@. Move Cloudy Drive to the Applications folder to install updates.": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك الإصدار %@. انقل Cloudy Drive إلى مجلد التطبيقات لتثبيت التحديثات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast Version %@. Bewege Cloudy Drive in den Ordner „Programme“, um Updates zu installieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes la versión %@. Mueve Cloudy Drive a la carpeta Aplicaciones para instalar actualizaciones."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez la version %@. Placez Cloudy Drive dans le dossier Applications pour installer les mises à jour."
           }
         }
       }
@@ -781,6 +1201,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vous êtes hors ligne"
+          }
+        }
+      }
+    },
+    "You're up to date": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك أحدث إصدار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles aktuell"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Está actualizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous êtes à jour"
           }
         }
       }

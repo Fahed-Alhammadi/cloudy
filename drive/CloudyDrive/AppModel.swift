@@ -16,8 +16,10 @@ final class AppModel {
     /// False while the user hasn't switched Cloudy on under System Settings → Login Items & Extensions → File Providers
     /// (new File Providers start switched off on current macOS).
     private(set) var finderEnabled = true
-    /// Download page of a newer `drive-v*` release.
-    private(set) var update: (version: String, url: URL)?
+    /// A newer `drive-v*` release (see `Updater`).
+    private(set) var update: Release?
+    /// True while an update downloads and installs.
+    private(set) var updating = false
 
     private var live: Task<Void, Never>?
     private var timer: Timer?
@@ -39,6 +41,10 @@ final class AppModel {
         // Testing without the sign-in window: `open --env CLOUDY_SERVER=… --env CLOUDY_USER=… --env CLOUDY_PASSWORD=… <app>`
         // CLOUDY_RESET=1 first removes the Finder domain and the stored account (alone: just signs out).
         let env = ProcessInfo.processInfo.environment
+        // CLOUDY_UPDATE=1 installs a newer release without asking (build with a lower MARKETING_VERSION to test the updater).
+        if env["CLOUDY_UPDATE"] != nil {
+            Task { if let release = try? await Updater.newer() { await Updater.offer(release, ask: false) } }
+        }
         let reset = env["CLOUDY_RESET"] != nil
         let login = env["CLOUDY_SERVER"].flatMap { s in env["CLOUDY_USER"].flatMap { u in env["CLOUDY_PASSWORD"].map { (s, u, $0) } } }
         if reset || (login != nil && !Account.load()) {
@@ -166,7 +172,13 @@ final class AppModel {
     func openInFinder() {
         guard let manager = NSFileProviderManager(for: Account.domain) else { return }
         manager.getUserVisibleURL(for: .rootContainer) { url, _ in
-            if let url { DispatchQueue.main.async { NSWorkspace.shared.open(url) } }
+            guard let url else { return }
+            // The URL is security-scoped for a sandboxed app; open(url) without access fails with "does not have permission".
+            DispatchQueue.main.async {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
         }
     }
 
@@ -179,26 +191,23 @@ final class AppModel {
         }
     }
 
-    // MARK: updates (newest drive-v* GitHub release; this repository also has server, app and desktop releases)
-
-    private struct Release: Decodable {
-        var tag_name: String
-        var html_url: String
-        var draft: Bool
-        var prerelease: Bool
-    }
+    // MARK: updates (see Updater)
 
     func checkForUpdate() async {
-        guard let url = URL(string: "https://api.github.com/repos/Fahed-Alhammadi/cloudy/releases?per_page=50"),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let releases = try? JSONDecoder().decode([Release].self, from: data) else { return }
-        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-        let newest = releases
-            .filter { !$0.draft && !$0.prerelease && $0.tag_name.hasPrefix("drive-v") }
-            .map { (version: String($0.tag_name.dropFirst(7)), url: $0.html_url) }
-            .max { $0.version.compare($1.version, options: .numeric) == .orderedAscending }
-        if let newest, newest.version.compare(current, options: .numeric) == .orderedDescending, let u = URL(string: newest.url) {
-            update = (newest.version, u)
-        }
+        if let release = try? await Updater.newer() { update = release }
+    }
+
+    func installUpdate() async {
+        guard let update, !updating else { return }
+        updating = true
+        defer { updating = false }
+        await Updater.offer(update)
+    }
+
+    func checkForUpdateNow() async {
+        guard !updating else { return }
+        updating = true
+        defer { updating = false }
+        if let release = await Updater.checkNow() { update = release }
     }
 }

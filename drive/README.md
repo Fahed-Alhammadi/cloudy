@@ -28,12 +28,16 @@ or contacts. The [desktop app](../desktop/README.md) is the other option: it kee
 - **Switched off by default:** current macOS adds a new File Provider location switched off. The menu then shows
   *Switch On in System Settings…*, which opens Login Items & Extensions. The user enables Cloudy there (ⓘ next to
   File Providers).
+- **Updates:** `CloudyDrive/Updater.swift` looks for the newest `drive-v*` release at launch and daily. The menu
+  then shows *Update to Cloudy Drive X.Y.Z…* (also *Check for Updates…*): it downloads the `.dmg`, checks GitHub's
+  SHA-256, copies the app out, checks the bundle ID and that it is signed by the same team, swaps the app, stops the
+  old extension process and relaunches. That is why the menu bar app is not sandboxed; the extension is.
 
 ## Layout
 
 ```
 project.yml            XcodeGen spec (CloudyDrive.xcodeproj is generated and git-ignored); macOS 14+
-CloudyDrive/           menu bar app io.cloudy.drive: DriveApp (menu), AppModel (account, domain, SSE, updates), SignInView
+CloudyDrive/           menu bar app io.cloudy.drive: DriveApp (menu), AppModel (account, domain, SSE), Updater, SignInView
 Provider/              extension io.cloudy.drive.provider: Extension, Item, Enumerator, Remote (listings, change walk)
 Shared/                Account (App Group, token, domain, `log`), Index — used by both targets
 Resources/             Localizable.xcstrings (5 languages, checked by tests/i18n_check.py), Assets (icon, menu bar icon)
@@ -59,6 +63,7 @@ A dev build's extension may need `pluginkit -e use -i io.cloudy.drive.provider`.
 ## Release
 
 `scripts/version.py bump drive X.Y.Z`, then push to main. `.github/workflows/drive.yml` builds a Developer
-ID–signed, notarized `.dmg` (`drive/build.sh dist`) and creates the `drive-vX.Y.Z` GitHub release. The menu shows
-*Download Cloudy Drive X.Y.Z* when a newer `drive-v*` release exists; there is no self-update. Update the download
+ID–signed, notarized `.dmg` (`drive/build.sh dist`) and creates the `drive-vX.Y.Z` GitHub release. Installed apps
+offer it from the menu and update themselves. Test the updater with a Debug build whose `MARKETING_VERSION` is lower
+than the latest release, outside /Applications: `open --env CLOUDY_UPDATE=1 <app>` installs it without asking. Update the download
 links in the root README and `docs/index.html` with each bump.

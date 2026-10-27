@@ -20,7 +20,7 @@ source, and the apps talk only to your server: no ads, no analytics, no tracking
 | **Android** | [Google Play](https://play.google.com/store/apps/details?id=io.cloudy.app) | Files, offline files, photo backup, document scanner, calendar, contacts |
 | **iPhone** | [TestFlight beta](https://testflight.apple.com/join/X1M6sYZm) (App Store soon) | Files with Quick Look, document scanner, sharing, calendar, contacts, Face ID lock |
 | **macOS, Windows, Linux** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/desktop-v1.0.1) (GitHub releases) | Keeps a folder on your computer in sync with your files |
-| **Cloudy Drive (macOS)** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/drive-v1.0.0) (GitHub releases) | All your files in Finder, downloaded only when you open them (saves disk space) |
+| **Cloudy Drive (macOS)** | [Download](https://github.com/Fahed-Alhammadi/cloudy/releases/tag/drive-v1.0.1) (GitHub releases) | All your files in Finder, downloaded only when you open them (saves disk space) |
 | **Other apps** | WebDAV, CalDAV, CardDAV | Finder, Windows Explorer, rclone, Thunderbird, DAVx⁵, Apple Calendar/Contacts |
 
 Desktop downloads: `.dmg` (macOS, Apple silicon or Intel) or `.pkg` (all Macs), `.exe` (Windows), `.AppImage` or
@@ -179,8 +179,8 @@ The database schema migrates itself at startup. Your data stays in the volumes.
 
 **Apps.** Android and iPhone update through Google Play and the App Store (TestFlight for the beta). The desktop app
 checks GitHub once a day for a new version, downloads it in the background and installs it when you restart or quit
-(*Settings → Check for updates* checks right away). Cloudy Drive shows *Download Cloudy Drive X.Y.Z* in its menu when
-a new version is out.
+(*Settings → Check for updates* checks right away). Cloudy Drive checks once a day too and shows *Update to
+Cloudy Drive X.Y.Z…* in its menu, which installs the new version and relaunches (*Check for Updates…* checks right away).
 
 ## Two-factor authentication
 

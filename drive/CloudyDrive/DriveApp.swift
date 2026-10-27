@@ -47,10 +47,13 @@ private struct MenuContent: View {
             if let problem = model.problem { Text(problem) }
             Button("Sign in…") { SignInWindow.show() }
         }
+        Divider()
         if let update = model.update {
-            Divider()
-            Button("Download Cloudy Drive \(update.version)") { NSWorkspace.shared.open(update.url) }
+            Button("Update to Cloudy Drive \(update.version)…") { Task { await model.installUpdate() } }
+                .disabled(model.updating)
         }
+        Button("Check for Updates…") { Task { await model.checkForUpdateNow() } }
+            .disabled(model.updating)
         Divider()
         Button("Quit Cloudy Drive") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
