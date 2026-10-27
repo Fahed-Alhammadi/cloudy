@@ -135,6 +135,9 @@ async function files(req: IncomingMessage, res: ServerResponse, user: User, segs
   const parentOf = async () => (segs.length ? F.resolvePath(user.id, segs.slice(0, -1)) : undefined);
   let usedCache: number | undefined;
   const used = async () => (usedCache ??= await F.usage(user.id));
+  // macOS's WebDAV client (Finder "Connect to Server", Cloudy Drive's "Mount as a drive") waits 90 s before
+  // finishing a mount when the folder reports quota, so it gets none (Finder then shows no free space).
+  const quota = !String(req.headers['user-agent'] ?? '').startsWith('WebDAVFS/');
 
   const props = (n: F.Node): Props => {
     const m: Props = new Map<string, () => string | Promise<string>>([
@@ -146,8 +149,10 @@ async function files(req: IncomingMessage, res: ServerResponse, user: User, segs
       [d('lockdiscovery'), () => ''],
     ]);
     if (n.is_dir) {
-      m.set(d('quota-used-bytes'), async () => String(await used()));
-      m.set(d('quota-available-bytes'), async () => String(user.quota_bytes == null ? 1024 ** 4 : Math.max(0, user.quota_bytes - (await used()))));
+      if (quota) {
+        m.set(d('quota-used-bytes'), async () => String(await used()));
+        m.set(d('quota-available-bytes'), async () => String(user.quota_bytes == null ? 1024 ** 4 : Math.max(0, user.quota_bytes - (await used()))));
+      }
     } else {
       m.set(d('getcontentlength'), () => String(n.size));
       m.set(d('getcontenttype'), () => esc(n.mime));
