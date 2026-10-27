@@ -116,6 +116,11 @@ final class AppModel {
             if let me = try? await API.shared.me() {
                 Account.update(me)
                 user = me
+                // The token works: let Finder retry now instead of waiting out its back-off after a 401.
+                if let manager = NSFileProviderManager(for: Account.domain) {
+                    try? await manager.signalErrorResolved(NSFileProviderError(.notAuthenticated))
+                    try? await manager.signalEnumerator(for: .workingSet)
+                }
             }
         }
         live?.cancel()
@@ -124,6 +129,12 @@ final class AppModel {
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
             Task { @MainActor in AppModel.shared.signalChanges() }
         }
+    }
+
+    /// The app was opened again while running, e.g. by Finder's Sign In button when the extension reports
+    /// `.notAuthenticated`. Signed out: show the sign-in window. Signed in: re-check the token, a 401 shows it too.
+    func reopened() {
+        if signedIn { connect() } else { SignInWindow.show() }
     }
 
     private func disconnect() {
