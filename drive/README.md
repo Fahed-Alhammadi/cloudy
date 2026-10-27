@@ -30,6 +30,10 @@ or contacts. The [desktop app](../desktop/README.md) is the other option: it kee
 - **Switched off by default:** current macOS adds a new File Provider location switched off. The menu then shows
   *Switch On in System Settings…*, which opens Login Items & Extensions. The user enables Cloudy there (ⓘ next to
   File Providers).
+- **Drive:** *Mount as a drive* (`CloudyDrive/DriveMount.swift`) mounts `/dav/files/<user>/` with macOS's WebDAV
+  client (NetFS, no login dialog), using the device token as password (it is an app password, which DAV accepts).
+  macOS names the volume after the user id. Remounted at launch while on (UserDefaults `mountsDrive`), ejected on
+  sign out. Online only; the File Provider location stays the main way to use Cloudy in Finder.
 - **Updates:** `CloudyDrive/Updater.swift` looks for the newest `drive-v*` release at launch and daily. The menu
   then shows *Update to Cloudy Drive X.Y.Z…* (also *Check for Updates…*): it downloads the `.dmg`, checks GitHub's
   SHA-256, copies the app out, checks the bundle ID and that it is signed by the same team, swaps the app, stops the
@@ -39,7 +43,7 @@ or contacts. The [desktop app](../desktop/README.md) is the other option: it kee
 
 ```
 project.yml            XcodeGen spec (CloudyDrive.xcodeproj is generated and git-ignored); macOS 14+
-CloudyDrive/           menu bar app io.cloudy.drive: DriveApp (menu), AppModel (account, domain, SSE), Updater, SignInView
+CloudyDrive/           menu bar app io.cloudy.drive: DriveApp (menu), AppModel (account, domain, SSE), Updater, DriveMount, SignInView
 Provider/              extension io.cloudy.drive.provider: Extension, Item, Enumerator, Remote (listings, change walk)
 Shared/                Account (App Group, token, domain, `log`), Index — used by both targets
 Resources/             Localizable.xcstrings (5 languages, checked by tests/i18n_check.py), Assets (icon, menu bar icon)

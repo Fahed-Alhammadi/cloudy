@@ -20,6 +20,13 @@ final class AppModel {
     private(set) var update: Release?
     /// True while an update downloads and installs.
     private(set) var updating = false
+    /// Cloudy also mounted as a network drive (see `DriveMount`); remounted at launch while switched on.
+    var mountsDrive = UserDefaults.standard.bool(forKey: "mountsDrive") {
+        didSet {
+            UserDefaults.standard.set(mountsDrive, forKey: "mountsDrive")
+            Task { if mountsDrive { await mountDrive(reveal: true) } else { await DriveMount.unmount() } }
+        }
+    }
 
     private var live: Task<Void, Never>?
     private var timer: Timer?
@@ -85,6 +92,7 @@ final class AppModel {
     func signOut() {
         let revoke = API.shared.token != nil
         Task {
+            await DriveMount.unmount() // before the token it mounted with is revoked
             if revoke { await API.shared.logout() }
             // Keeps files with changes not uploaded yet (macOS moves them to a folder it names).
             _ = try? await NSFileProviderManager.remove(Account.domain, mode: .preserveDirtyUserData)
@@ -121,6 +129,7 @@ final class AppModel {
                     try? await manager.signalErrorResolved(NSFileProviderError(.notAuthenticated))
                     try? await manager.signalEnumerator(for: .workingSet)
                 }
+                await mountDrive(reveal: false)
             }
         }
         live?.cancel()
@@ -128,6 +137,18 @@ final class AppModel {
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { _ in
             Task { @MainActor in AppModel.shared.signalChanges() }
+        }
+    }
+
+    /// Mounts the drive when switched on; `reveal` opens it in Finder (when the user just switched it on).
+    private func mountDrive(reveal: Bool) async {
+        guard mountsDrive, let user, let token = API.shared.token else { return }
+        do {
+            let url = try await DriveMount.mount(server: server, user: user.id, token: token)
+            if reveal { NSWorkspace.shared.open(url) }
+        } catch {
+            log.error("Mounting the drive failed: \(error, privacy: .public)")
+            problem = error.localizedDescription
         }
     }
 

@@ -46,6 +46,7 @@ private struct MenuContent: View {
                 if let u = URL(string: model.server) { NSWorkspace.shared.open(u) }
             }
             Divider()
+            Toggle("Mount as a drive", isOn: $model.mountsDrive)
             Toggle("Open at login", isOn: $model.opensAtLogin)
             Button("Sign out") { model.signOut() }
         } else {

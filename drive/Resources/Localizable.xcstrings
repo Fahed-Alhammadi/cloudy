@@ -197,6 +197,34 @@
         }
       }
     },
+    "Could not mount the drive (error %lld)": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تركيب القرص (خطأ %lld)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laufwerk konnte nicht eingebunden werden (Fehler %lld)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo montar la unidad (error %lld)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de monter le disque (erreur %lld)"
+          }
+        }
+      }
+    },
     "Could not update": {
       "localizations": {
         "ar": {
@@ -417,6 +445,34 @@
           "stringUnit": {
             "state": "translated",
             "value": "Plus tard"
+          }
+        }
+      }
+    },
+    "Mount as a drive": {
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تركيب كقرص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als Laufwerk einbinden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Montar como unidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monter comme disque"
           }
         }
       }
