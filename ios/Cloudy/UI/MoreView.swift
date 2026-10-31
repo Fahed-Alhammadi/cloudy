@@ -30,16 +30,16 @@ struct MoreView: View {
                 }
                 // Same entries and order as Android's More screen; the Files tab only shows the folders.
                 Section {
-                    NavigationLink(value: Route.list(.recent)) { SettingsLabel("Recent", icon: "clock.fill", color: .blue) }
-                    NavigationLink(value: Route.list(.favorites)) { SettingsLabel("Favorites", icon: "star.fill", color: .orange) }
-                    NavigationLink(value: Route.list(.shared)) { SettingsLabel("Shared with you", icon: "person.2.fill", color: .green) }
-                    NavigationLink(value: Route.links) { SettingsLabel("Shared by you", icon: "link", color: .teal) }
-                    NavigationLink(value: Route.trash) { SettingsLabel("Trash", icon: "trash.fill", color: .gray) }
+                    NavigationLink(value: Route.list(.recent)) { SettingsLabel("Recent", icon: "clock.fill", color: .settingsBlue) }
+                    NavigationLink(value: Route.list(.favorites)) { SettingsLabel("Favorites", icon: "star.fill", color: .settingsOrange) }
+                    NavigationLink(value: Route.list(.shared)) { SettingsLabel("Shared with you", icon: "person.2.fill", color: .settingsGreen) }
+                    NavigationLink(value: Route.links) { SettingsLabel("Shared by you", icon: "link", color: .settingsTeal) }
+                    NavigationLink(value: Route.trash) { SettingsLabel("Trash", icon: "trash.fill", color: .settingsGray) }
                 }
                 Section {
-                    NavigationLink { DevicesView() } label: { SettingsLabel("Devices", icon: "iphone", color: .indigo) }
+                    NavigationLink { DevicesView() } label: { SettingsLabel("Devices", icon: "iphone", color: .settingsIndigo) }
                     if canUseAppLock {
-                        Toggle(isOn: $appLock) { SettingsLabel("App lock", icon: "faceid", color: .green) }
+                        Toggle(isOn: $appLock) { SettingsLabel("App lock", icon: "faceid", color: .settingsGreen) }
                     }
                     Button {
                         if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) }
@@ -47,7 +47,7 @@ struct MoreView: View {
                         LabeledContent {
                             Text(Locale.current.localizedString(forLanguageCode: Locale.current.language.languageCode?.identifier ?? "en") ?? "")
                         } label: {
-                            SettingsLabel("Language", icon: "globe", color: .blue)
+                            SettingsLabel("Language", icon: "globe", color: .settingsBlue)
                         }
                     }
                     .foregroundStyle(.primary)
@@ -56,9 +56,9 @@ struct MoreView: View {
                 }
                 Section {
                     if let web = URL(string: session.server) {
-                        Link(destination: web) { SettingsLabel("Open Cloudy on the web", icon: "safari.fill", color: .blue).foregroundStyle(.primary) }
+                        Link(destination: web) { SettingsLabel("Open Cloudy on the web", icon: "safari.fill", color: .settingsBlue).foregroundStyle(.primary) }
                     }
-                    Link(destination: privacyPolicyURL) { SettingsLabel("Privacy policy", icon: "hand.raised.fill", color: .purple).foregroundStyle(.primary) }
+                    Link(destination: privacyPolicyURL) { SettingsLabel("Privacy policy", icon: "hand.raised.fill", color: .settingsPurple).foregroundStyle(.primary) }
                     LabeledContent("Version", value: version)
                 }
                 Section {
@@ -75,6 +75,18 @@ struct MoreView: View {
             }
         }
     }
+}
+
+/// Settings app tones: fixed, deep and solid in light and dark mode (the dynamic system colors are paler since iOS 26).
+/// Orange, green and teal are a shade deeper than Apple's so the white symbol keeps ~3:1 contrast.
+private extension Color {
+    static let settingsBlue = Color(red: 0x00 / 255, green: 0x7A / 255, blue: 0xFF / 255)
+    static let settingsOrange = Color(red: 0xF0 / 255, green: 0x82 / 255, blue: 0x00 / 255)
+    static let settingsGreen = Color(red: 0x2F / 255, green: 0xA8 / 255, blue: 0x4F / 255)
+    static let settingsTeal = Color(red: 0x14 / 255, green: 0x97 / 255, blue: 0xB0 / 255)
+    static let settingsGray = Color(red: 0x8E / 255, green: 0x8E / 255, blue: 0x93 / 255)
+    static let settingsIndigo = Color(red: 0x58 / 255, green: 0x56 / 255, blue: 0xD6 / 255)
+    static let settingsPurple = Color(red: 0xAF / 255, green: 0x52 / 255, blue: 0xDE / 255)
 }
 
 /// A row label with a white symbol on a colored rounded square, like the Settings app.
@@ -97,7 +109,7 @@ private struct SettingsLabel: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 29, height: 29)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color.gradient))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
         }
     }
 }

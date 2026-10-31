@@ -1,5 +1,1 @@
-• Fresh new look: colored file type icons and shorter dates
-• Contacts sorted into A–Z sections, with a colored avatar for each person
-• Calendar: event times at a glance in the day list
-• More tab with Settings-style icons and your storage at the top
-• Better contrast in dark mode
+• More tab: richer, Settings-style colors for every icon
