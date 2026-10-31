@@ -39,6 +39,9 @@ SIMCTL_CHILD_CLOUDY_SERVER=http://localhost:8080 SIMCTL_CHILD_CLOUDY_TOKEN=<devi
   xcrun simctl launch booted io.cloudy.app
 ```
 
+**App Store screenshots and preview video:** [appstore/README.md](appstore/README.md) (`appstore/seed.py` fills a
+throwaway server with the demo account, `appstore/render.py` frames the captures).
+
 ## Code map
 
 | Path | What it does |

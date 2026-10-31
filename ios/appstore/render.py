@@ -14,11 +14,12 @@ SIZES = [('iphone-6.9', 1320, 2868), ('iphone-6.3', 1206, 2622)]
 
 SHOTS = [  # (output, source, title, subtitle)
     ('1-files', 'files', 'Your own cloud,<br>in your pocket', 'Files, calendars and contacts on your own server'),
-    ('2-folders', 'folder', 'All your files,<br>organized', 'Browse, search, upload and preview anything'),
+    ('2-photos', 'photos', 'All your files,<br>at a glance', 'Browse, search, upload and preview anything'),
     ('3-sharing', 'share', 'Share in seconds', 'Links with a password and expiry date, or share with people'),
     ('4-calendar', 'calendar', 'Plan your days', 'Your calendars, synced with your own server'),
     ('5-contacts', 'contacts', 'Contacts that<br>stay yours', 'Import from .vcf or .csv, export any time'),
     ('6-editor', 'editor', 'Edit on the go', 'Open and edit notes and text files anywhere'),
+    ('7-more', 'more', 'Everything<br>in one place', 'Favorites, shared files, trash and settings'),
 ]
 
 PAGE = '''<!doctype html><meta charset="utf-8"><style>

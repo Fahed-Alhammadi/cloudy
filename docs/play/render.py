@@ -19,6 +19,7 @@ SHOTS = [  # (output, source, title, subtitle)
     ('4-calendar', 'calendar', 'Your calendar', 'Synced with your Cloudy server'),
     ('5-contacts', 'contacts', 'All your contacts', 'Import from .vcf or .csv, export any time'),
     ('6-editor', 'preview', 'Edit on the go', 'Open and edit text files anywhere'),
+    ('7-more', 'more', 'Everything in one place', 'Favorites, shared files, trash and settings'),
 ]
 
 def shot_html(src, title, sub):

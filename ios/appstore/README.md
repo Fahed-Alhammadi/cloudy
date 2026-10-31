@@ -7,7 +7,7 @@ Ready to upload in App Store Connect → the app's version page → *App Preview
 
 | Slot | Screenshots | Preview video |
 |---|---|---|
-| **iPhone 6.9" Display** (required) | `en-US/iphone-6.9/*.png`, 1320×2868 | `en-US/preview-886x1920.mp4` |
+| **iPhone 6.9" Display** (required) | `en-US/iphone-6.9/*.png` (7), 1320×2868 | `en-US/preview-886x1920.mp4` |
 | iPhone 6.1"/6.3" Display (optional: scaled from 6.9" if empty) | `en-US/iphone-6.3/*.png`, 1206×2622 | the same `.mp4` (886×1920 is accepted there too) |
 
 **App icon:** not uploaded here. App Store Connect takes it from the build (`AppIcon` 1024×1024, opaque, in
@@ -38,8 +38,10 @@ python3 -I ios/appstore/render.py     # raw/*.png → en-US/iphone-6.9|6.3/*.png
 
 ## Taking new captures
 
-1. Run a local server (`docker compose -f deploy/docker-compose.yml --env-file .env up -d`) with a demo account full of
-   realistic, fictional content, and get a device token for it (`POST /api/auth/token`).
+1. Run a fresh, throwaway local server (Docker, or Postgres + `node src/server.ts` with `PORT=80`) and fill it with the
+   fictional demo account: `python3 -I ios/appstore/seed.py http://127.0.0.1 <admin password> [<database url>]`. It prints
+   the device token and the `CLOUDY_OPEN` / `CLOUDY_TOUR` values (with the database URL it also backdates file dates).
+   The simulator uses `http://cloud.local` (below); seed through `127.0.0.1`, Python's `.local` lookups are flaky.
 2. Build for the simulator (`ios/build.sh`) and use the **iPhone Pro Max** simulator (6.9", 1320×2868), light mode,
    status bar `xcrun simctl status_bar booted override --time 9:41 --batteryState charged --batteryLevel 100 …`.
 3. Debug builds open screens from the launch environment, so no tapping is needed (`Cloudy/UI/Screenshots.swift`):
@@ -80,4 +82,5 @@ ffmpeg -y -ss 2.0 -i ios/appstore/raw/tour.mov -f lavfi -i anullsrc=channel_layo
   ios/appstore/en-US/preview-886x1920.mp4
 ```
 
-`-ss 2.0` skips the app launch; check the first and last frames, since launch time varies.
+`-ss 2.0` skips the app launch; check the first and last frames, since launch time varies (2026-10-31: `-ss 2.3` and
+`stop_duration=3` to reach 29 s). Old captures are kept in `raw/_previous/` and `en-US/_previous/`.
