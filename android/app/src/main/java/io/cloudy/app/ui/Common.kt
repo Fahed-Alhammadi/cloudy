@@ -145,6 +145,19 @@ object TypeColor {
     val Other = Color(0xFF64748B)
 }
 
+/** More screen icon colors (Android Settings style); the iPhone app uses the same hue per entry where it has one. */
+object SettingColor {
+    val Blue = Color(0xFF1A73E8)
+    val Sky = Color(0xFF0288D1)
+    val Orange = Color(0xFFE37400)
+    val Green = Color(0xFF1E8E3E)
+    val Teal = Color(0xFF00897B)
+    val Purple = Color(0xFF8E44D9)
+    val Pink = Color(0xFFD81B60)
+    val Indigo = Color(0xFF4F5BD5)
+    val Gray = Color(0xFF5F6368)
+}
+
 fun iconFor(node: FileNode): Pair<ImageVector, Color> {
     val m = node.mime
     val ext = node.name.substringAfterLast('.', "").lowercase()

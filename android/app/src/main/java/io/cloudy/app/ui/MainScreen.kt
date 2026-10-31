@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -190,13 +191,16 @@ fun MoreScreen(nav: NavController) {
             fun Group(content: @Composable () -> Unit) =
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainerLowest)) { content() }
+            // Each entry has its own color, like Android's Settings: a pastel circle with the glyph in the deeper shade.
             @Composable
-            fun Badge(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color = MaterialTheme.colorScheme.onPrimaryContainer,
-                      bg: Color = MaterialTheme.colorScheme.primaryContainer) =
-                Box(Modifier.size(36.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
+            fun Badge(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, bg: Color? = null) {
+                val tint = if (bg != null) color else color.forTheme()
+                Box(Modifier.size(36.dp).clip(CircleShape).background(bg ?: tint.copy(alpha = if (isSystemInDarkTheme()) 0.22f else 0.14f)),
+                    contentAlignment = Alignment.Center) { Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp)) }
+            }
             @Composable
-            fun Entry(label: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, route: String) =
-                ListItem(modifier = Modifier.clickable { nav.navigate(route) }, colors = itemColors, leadingContent = { Badge(icon) },
+            fun Entry(label: Int, icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, route: String) =
+                ListItem(modifier = Modifier.clickable { nav.navigate(route) }, colors = itemColors, leadingContent = { Badge(icon, color) },
                     headlineContent = { Text(stringResource(label)) },
                     trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.outline) })
 
@@ -219,23 +223,23 @@ fun MoreScreen(nav: NavController) {
                 }
             }
             Group {
-                Entry(R.string.recent, Icons.Outlined.AccessTime, "list/recent")
-                Entry(R.string.favorites, Icons.Outlined.Star, "list/favorites")
-                Entry(R.string.shared_with_you, Icons.Outlined.People, "list/shared-in")
-                Entry(R.string.shared_by_you, Icons.Outlined.Share, "list/shared-out")
-                Entry(R.string.available_offline, Icons.Outlined.CloudDone, "list/offline")
-                Entry(R.string.deleted_files, Icons.Outlined.Delete, "trash")
+                Entry(R.string.recent, Icons.Outlined.AccessTime, SettingColor.Blue, "list/recent")
+                Entry(R.string.favorites, Icons.Outlined.Star, SettingColor.Orange, "list/favorites")
+                Entry(R.string.shared_with_you, Icons.Outlined.People, SettingColor.Green, "list/shared-in")
+                Entry(R.string.shared_by_you, Icons.Outlined.Share, SettingColor.Teal, "list/shared-out")
+                Entry(R.string.available_offline, Icons.Outlined.CloudDone, SettingColor.Purple, "list/offline")
+                Entry(R.string.deleted_files, Icons.Outlined.Delete, SettingColor.Gray, "trash")
             }
             Group {
-                Entry(R.string.photo_backup, Icons.Outlined.PhotoCamera, "backup")
-                Entry(R.string.connection_check, Icons.Outlined.NetworkCheck, "connection")
+                Entry(R.string.photo_backup, Icons.Outlined.PhotoCamera, SettingColor.Pink, "backup")
+                Entry(R.string.connection_check, Icons.Outlined.NetworkCheck, SettingColor.Sky, "connection")
             }
             Text(stringResource(R.string.section_security), Modifier.padding(start = 32.dp, top = 14.dp, bottom = 2.dp),
                 style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Group {
                 ListItem(
                     modifier = Modifier.clickable { chooseLanguage = true }, colors = itemColors,
-                    leadingContent = { Badge(Icons.Outlined.Language) },
+                    leadingContent = { Badge(Icons.Outlined.Language, SettingColor.Blue) },
                     headlineContent = { Text(stringResource(R.string.language)) },
                     supportingContent = { Text(Lang.current(context)?.let { Lang.NAMES[it] } ?: stringResource(R.string.language_system)) },
                 )
@@ -243,7 +247,7 @@ fun MoreScreen(nav: NavController) {
                 val confirmTitle = stringResource(R.string.app_lock_turn_on)
                 ListItem(
                     colors = itemColors,
-                    leadingContent = { Badge(Icons.Outlined.Fingerprint) },
+                    leadingContent = { Badge(Icons.Outlined.Fingerprint, SettingColor.Green) },
                     headlineContent = { Text(stringResource(R.string.app_lock)) },
                     supportingContent = { Text(stringResource(if (lockAvailable || lockOn) R.string.app_lock_summary else R.string.app_lock_unavailable)) },
                     trailingContent = {
@@ -254,7 +258,7 @@ fun MoreScreen(nav: NavController) {
                         })
                     },
                 )
-                Entry(R.string.devices, Icons.Outlined.Devices, "devices")
+                Entry(R.string.devices, Icons.Outlined.Devices, SettingColor.Indigo, "devices")
             }
             Group {
                 ListItem(
