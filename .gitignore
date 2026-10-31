@@ -23,6 +23,7 @@ release-notes.md
 
 # Claude Code project notes: kept local, not published
 CLAUDE.md
+.claude/
 
 # Store API keys (App Store Connect .p8, Google Play service account .json): keep them in Keys/, never commit
 Keys/
